@@ -122,17 +122,17 @@ def main(argv=None):
     a.add_argument("wurzel", type=Path)
     a.add_argument("--intervall", type=int, default=60)
 
-    a = sub.add_parser("vorlage-jat", help="Report-Vorlage im JAT-Muster mit Platzhaltern erzeugen")
+    a = sub.add_parser("vorlage", help="Standard-Report-Vorlage mit Platzhaltern erzeugen")
     a.add_argument("ziel", type=Path)
 
     ns = ap.parse_args(argv)
 
     if ns.cmd == "einrichten":
         C.init_root(ns.wurzel)
-        from .report import erstelle_jat_vorlage
-        v = ns.wurzel / C.VORLAGENDIR / "report_jat.docx"
+        from .report import erstelle_standard_vorlage
+        v = ns.wurzel / C.VORLAGENDIR / "report_standard.docx"
         if not v.exists():
-            erstelle_jat_vorlage(v)
+            erstelle_standard_vorlage(v)
         _out(f"Eingerichtet: {ns.wurzel}")
     elif ns.cmd == "kurs-anlegen":
         cfg = C.create_course(ns.kurs, von=ns.von, profil=ns.profil, logbuch_lv=ns.logbuch_lv,
@@ -190,9 +190,9 @@ def main(argv=None):
                     except Exception as e:  # noqa: BLE001
                         _out(f"Fehler: {e}")
             time.sleep(ns.intervall)
-    elif ns.cmd == "vorlage-jat":
-        from .report import erstelle_jat_vorlage
-        _out(f"Vorlage: {erstelle_jat_vorlage(ns.ziel)}")
+    elif ns.cmd == "vorlage":
+        from .report import erstelle_standard_vorlage
+        _out(f"Vorlage: {erstelle_standard_vorlage(ns.ziel)}")
     return 0
 
 

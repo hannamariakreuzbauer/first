@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>LV-Tool</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root{--bg:#f4f5f7;--card:#fff;--ink:#1c2430;--mut:#667085;--line:#dde1e7;--acc:#1f5fbf;--acc2:#e8f0fc;--ok:#1a7f4b;--warn:#b76e00;--bad:#b42318;--warnbg:#fff4de;--badbg:#fde8e6;--okbg:#e4f5ec}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.45 "Segoe UI",system-ui,-apple-system,Arial,sans-serif;color:var(--ink);background:var(--bg);height:100vh;display:flex;flex-direction:column}
+header{display:flex;align-items:center;gap:14px;padding:10px 18px;background:#182233;color:#fff}
+header h1{font-size:16px;margin:0;font-weight:600}
+header .pfad{color:#b8c2d3;font-size:12.5px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+button{font:inherit;border:1px solid var(--line);background:#fff;color:var(--ink);padding:6px 12px;border-radius:6px;cursor:pointer}
+button:hover{border-color:#b9c0cc;background:#fafbfc}
+button.pri{background:var(--acc);border-color:var(--acc);color:#fff}
+button.pri:hover{background:#184e9e}
+button.klein{padding:3px 8px;font-size:12.5px}
+button:disabled{opacity:.5;cursor:default}
+header button{background:transparent;color:#fff;border-color:#4a5873}
+header button:hover{background:#26334a}
+.wrap{flex:1;display:flex;min-height:0}
+nav{width:250px;background:#fff;border-right:1px solid var(--line);overflow:auto;padding:12px 10px}
+nav .sem{font-weight:600;margin:12px 6px 4px;color:var(--mut);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+nav a{display:block;padding:7px 10px;border-radius:6px;color:var(--ink);text-decoration:none;cursor:pointer}
+nav a:hover{background:#f1f3f6}
+nav a.akt{background:var(--acc2);color:var(--acc);font-weight:600}
+nav a small{display:block;color:var(--mut);font-weight:400}
+nav .neu{margin-top:14px;display:flex;flex-direction:column;gap:6px}
+main{flex:1;overflow:auto;padding:18px 22px;min-width:0}
+h2{margin:0 0 2px;font-size:20px}
+.sub{color:var(--mut);margin-bottom:14px}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:16px}
+.tabs a{padding:8px 14px;cursor:pointer;border-bottom:2px solid transparent;color:var(--mut)}
+.tabs a.akt{color:var(--acc);border-color:var(--acc);font-weight:600}
+.badge{display:inline-block;min-width:20px;text-align:center;padding:0 6px;border-radius:10px;background:var(--warnbg);color:var(--warn);font-size:12px;font-weight:600;margin-left:4px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin-bottom:12px}
+.kacheln{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:14px}
+.kachel{background:#fff;border:1px solid var(--line);border-radius:8px;padding:12px 14px}
+.kachel b{display:block;font-size:24px;font-weight:600}
+.kachel span{color:var(--mut);font-size:12.5px}
+.kachel.warn b{color:var(--warn)} .kachel.ok b{color:var(--ok)}
+.zeile{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+table{border-collapse:collapse;width:100%;background:#fff}
+th,td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+th{font-size:12px;color:var(--mut);font-weight:600;position:sticky;top:0;background:#fff}
+td.z{text-align:right;font-variant-numeric:tabular-nums}
+td.neg{background:var(--badbg)} td.off{background:var(--warnbg)}
+.tabelle{border:1px solid var(--line);border-radius:8px;overflow:auto;max-height:calc(100vh - 260px)}
+.pill{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;background:#eef0f3}
+.pill.ok{background:var(--okbg);color:var(--ok)} .pill.warn{background:var(--warnbg);color:var(--warn)} .pill.bad{background:var(--badbg);color:var(--bad)}
+.frage p{margin:0 0 10px;white-space:pre-wrap}
+.frage .opt{display:flex;flex-wrap:wrap;gap:6px}
+.frage .kat{float:right;color:var(--mut);font-size:12px}
+input,select,textarea{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--ink)}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--acc2);border-color:var(--acc)}
+form.f{display:grid;grid-template-columns:220px 1fr;gap:9px 14px;align-items:center;max-width:820px}
+form.f label{color:var(--mut)} form.f small{grid-column:2;color:var(--mut);margin-top:-6px}
+.split{display:grid;grid-template-columns:270px 1fr;gap:12px;height:calc(100vh - 270px);min-height:320px}
+.liste{background:#fff;border:1px solid var(--line);border-radius:8px;overflow:auto}
+.liste a{display:block;padding:7px 10px;border-bottom:1px solid var(--line);cursor:pointer}
+.liste a.akt{background:var(--acc2)} .liste a small{color:var(--mut);display:block}
+iframe{width:100%;height:100%;border:1px solid var(--line);border-radius:8px;background:#fff}
+.hinweis{background:var(--warnbg);border:1px solid #f2d59a;color:#6b4300;border-radius:8px;padding:10px 14px;margin-bottom:12px}
+.fehler{background:var(--badbg);border-color:#f3b7b1;color:var(--bad)}
+.leer{color:var(--mut);padding:30px;text-align:center}
+dialog{border:1px solid var(--line);border-radius:10px;padding:20px 22px;max-width:640px;width:92%}
+dialog::backdrop{background:rgba(20,28,40,.45)}
+#toast{position:fixed;right:18px;bottom:18px;background:#182233;color:#fff;padding:10px 16px;border-radius:8px;display:none;max-width:480px;z-index:9}
+#toast.fehler{background:var(--bad)}
+.start{max-width:620px;margin:8vh auto;text-align:center}
+.mono{font-family:Consolas,monospace;font-size:12.5px}
+ul.k{margin:6px 0 0;padding-left:20px}
+</style>
+</head>
+<body>
+<header><h1>LV-Tool</h1><span class="pfad" id="hpfad"></span><button id="bWurzel">Eingangsordner ändern</button></header>
+<div class="wrap"><nav id="nav"></nav><main id="main"></main></div>
+<div id="toast"></div>
+<dialog id="dlg"></dialog>
+<script>
+const T="__TOKEN__";
+let Z=null,K=null,E=null,TAB="uebersicht",STAND=null,WACHE=true,VKEY=null;
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+async function api(name,data){
+  const r=await fetch("/api/"+name,{method:data===undefined?"GET":"POST",headers:{"X-Token":T,"Content-Type":"application/json"},body:data===undefined?undefined:JSON.stringify(data)});
+  const j=await r.json(); if(!r.ok) throw new Error(j.fehler||"Fehler"); return j;
+}
+function toast(msg,fehler){const t=$("#toast");t.textContent=msg;t.className=fehler?"fehler":"";t.style.display="block";clearTimeout(t._t);t._t=setTimeout(()=>t.style.display="none",fehler?9000:3500);}
+async function versuch(fn){try{return await fn();}catch(e){toast(e.message,true);}}
+
+async function laden(){Z=await api("zustand");$("#hpfad").textContent=Z.wurzel||"";nav();if(!Z.wurzel)start();else if(!K)leer();}
+function start(){$("#nav").innerHTML="";$("#main").innerHTML=`<div class="start card"><h2>Willkommen</h2><p class="sub">Wählen Sie den Eingangsordner. Darin liegt je Semester ein Ordner und darin je Lehrveranstaltung ein Unterordner. Die App legt dort zusätzlich die Ordner „_profile“ und „_vorlagen“ an.</p><p><button class="pri" onclick="wurzelWaehlen()">Eingangsordner wählen</button></p><p class="sub">oder Pfad eingeben:</p><p class="zeile" style="justify-content:center"><input id="wpfad" size="50" placeholder="C:\\Users\\…\\Documents\\Lehre\\Eingang"><button onclick="wurzelSetzen($('#wpfad').value)">Übernehmen</button></p></div>`;}
+async function wurzelWaehlen(){const r=await versuch(()=>api("ordner_waehlen",{}));if(r&&r.pfad)wurzelSetzen(r.pfad);else if(!r){const p=prompt("Pfad des Eingangsordners:");if(p)wurzelSetzen(p);}}
+async function wurzelSetzen(p){if(!p)return;await versuch(async()=>{Z=await api("wurzel",{pfad:p});K=null;E=null;$("#hpfad").textContent=Z.wurzel;nav();leer();toast("Eingangsordner eingerichtet.");});}
+$("#bWurzel").onclick=wurzelWaehlen;
+
+function nav(){if(!Z||!Z.wurzel){$("#nav").innerHTML="";return;}
+  let h="";for(const s of Z.semester){h+=`<div class="sem">${esc(s.name)}</div>`;for(const k of s.kurse)h+=`<a class="${K===k.pfad?"akt":""}" data-p="${esc(k.pfad)}">${esc(k.name)}<small>${k.eingerichtet?esc(k.profil):"noch nicht eingerichtet"}</small></a>`;if(!s.kurse.length)h+=`<a style="color:var(--mut);cursor:default">keine Lehrveranstaltung</a>`;}
+  if(!Z.semester.length)h+=`<div class="leer">Noch kein Semester.</div>`;
+  h+=`<div class="neu"><button onclick="dlgKurs()">＋ Lehrveranstaltung</button><button onclick="dlgSemester()">＋ Semester</button></div>`;
+  $("#nav").innerHTML=h;document.querySelectorAll("nav a[data-p]").forEach(a=>a.onclick=()=>waehle(a.dataset.p));}
+function leer(){$("#main").innerHTML=`<div class="leer">Links eine Lehrveranstaltung wählen oder neu anlegen.</div>`;}
+function kursInfo(p){for(const s of Z.semester)for(const k of s.kurse)if(k.pfad===p)return {...k,semester:s.name};return null;}
+
+async function waehle(p){K=p;E=null;VKEY=null;STAND=null;nav();const k=kursInfo(p);if(!k.eingerichtet){einrichten(k);return;}TAB="uebersicht";await rechnen();}
+async function rechnen(still){if(!K)return;if(!still)$("#main").innerHTML=`<div class="leer">Verarbeite …</div>`;const r=await versuch(()=>api("verarbeiten",{pfad:K}));if(r){E=r;zeige();const a=await api("aenderung",{pfad:K});STAND=a.stand;}else if(!still){$("#main").innerHTML=kopf()+`<div class="hinweis fehler">Die Verarbeitung ist fehlgeschlagen. Bitte die Einstellungen prüfen.</div><div id="inh"></div>`;TAB="einstellungen";tabEinstellungen();}}
+
+function kopf(){const k=kursInfo(K);const n=E?E.offen.length:0;const w=E?E.warnungen.length+E.kontrolle.length:0;
+  const tabs=[["uebersicht","Übersicht"],["klaerungen","Klärungen"+(n?`<span class="badge">${n}</span>`:"")],["ergebnisse","Ergebnisse"],["entwuerfe","E-Mail-Entwürfe"],["protokoll","Protokoll"+(w?`<span class="badge">${w}</span>`:"")],["bewertung","Bewertung"],["einstellungen","Einstellungen"]];
+  return `<h2>${esc(k.titel||k.name)}</h2><div class="sub">${esc(k.semester)} · ${esc(k.name)}${E?" · Profil "+esc(E.profil):""}</div><div class="tabs">${tabs.map(t=>`<a class="${TAB===t[0]?"akt":""}" onclick="tab('${t[0]}')">${t[1]}</a>`).join("")}</div>`;}
+function tab(t){TAB=t;zeige();}
+function zeige(){$("#main").innerHTML=kopf()+`<div id="inh"></div>`;({uebersicht:tabUebersicht,klaerungen:tabKlaerungen,ergebnisse:tabErgebnisse,entwuerfe:tabEntwuerfe,protokoll:tabProtokoll,bewertung:tabBewertung,einstellungen:tabEinstellungen})[TAB]();}
+
+function tabUebersicht(){const n=E.offen.length;
+  let h=`<div class="kacheln"><div class="kachel"><b>${E.studenten.length}</b><span>Studenten</span></div><div class="kachel"><b>${E.termine.length}</b><span>Termine${E.termine_spaeter.length?` (+${E.termine_spaeter.length} ausstehend)`:""}</span></div><div class="kachel ${n?"warn":"ok"}"><b>${n}</b><span>offene Klärungen</span></div><div class="kachel ${E.kontrolle.length?"warn":"ok"}"><b>${E.kontrolle.length}</b><span>Abweichungen zur Arbeitsmappe</span></div><div class="kachel ${E.warnungen.length?"warn":"ok"}"><b>${E.warnungen.length}</b><span>Warnungen</span></div></div>`;
+  if(!E.studenten.length)h+=`<div class="hinweis">Noch keine offizielle Studentenliste erkannt. Legen Sie die Listen der Universität unverändert in den Ordner der Lehrveranstaltung und das Logbuch in den Semesterordner.</div>`;
+  if(!E.teile.length)h+=`<div class="hinweis">Für diese Lehrveranstaltung sind noch keine Teilleistungen festgelegt. <button class="klein" onclick="tab('bewertung')">Bewertung festlegen</button></div>`;
+  if(n)h+=`<div class="hinweis">${n} Fälle brauchen Ihre Entscheidung. <button class="klein" onclick="tab('klaerungen')">Zu den Klärungen</button></div>`;
+  h+=`<div class="card"><div class="zeile"><button class="pri" onclick="rechnen()">Neu verarbeiten</button><button onclick="oeffne(E.master)">Masterliste öffnen</button><button onclick="oeffne(K)">Ordner der Lehrveranstaltung öffnen</button><label style="margin-left:auto"><input type="checkbox" ${WACHE?"checked":""} onchange="WACHE=this.checked"> Ordner überwachen und bei neuen Dateien automatisch verarbeiten</label></div></div>`;
+  h+=`<div class="card"><button class="klein" style="float:right" onclick="tab('bewertung')">Bewertung bearbeiten</button><b>Bewertungsprofil ${esc(E.profil)}</b> – ${esc(E.profil_bezeichnung)}<table style="margin-top:8px"><tr><th>Teilleistung</th><th>Höchstpunkte</th></tr>${E.teile.map(t=>`<tr><td>${esc(t.name)} <span class="mono" style="color:var(--mut)">${esc(t.id)}</span></td><td>${t.max??"Zusatz"}</td></tr>`).join("")}</table>${E.zu_bestaetigen.length?`<p style="margin:10px 0 0"><b>Noch von Ihnen zu bestätigen:</b></p><ul class="k">${E.zu_bestaetigen.map(z=>`<li>${esc(z)}</li>`).join("")}</ul>`:""}</div>`;
+  $("#inh").innerHTML=h;}
+
+function tabKlaerungen(){if(!E.offen.length){$("#inh").innerHTML=`<div class="leer">Keine offenen Klärungen.</div>`;return;}
+  let h=`<div class="zeile" style="margin-bottom:10px"><span class="sub" style="margin:0">Ein Klick auf eine Antwort speichert sie dauerhaft. Antworten lassen sich unter „Protokoll“ zurücknehmen.</span><button style="margin-left:auto" onclick="rechnen()">Antworten anwenden und neu verarbeiten</button></div>`;
+  E.offen.forEach((q,i)=>{h+=`<div class="card frage" id="q${i}"><span class="kat">${q.kategorie==="struktur"?"einmalige Zuordnung":"Einzelfall"}</span><p>${esc(q.frage)}</p><div class="opt">${q.optionen.map((o,j)=>`<button onclick="antworte(${i},${j})">${esc(o[1])}</button>`).join("")}${q.freitext?`<input id="ft${i}" size="6" placeholder="Zahl"><button onclick="antworte(${i},-1)">übernehmen</button>`:""}</div></div>`;});
+  $("#inh").innerHTML=h;}
+let BEANTWORTET=0;
+async function antworte(i,j){const q=E.offen[i];const wert=j<0?$("#ft"+i).value.trim():q.optionen[j][0];if(wert==="")return;
+  const r=await versuch(()=>api("antwort",{pfad:K,id:q.id,wert}));if(!r)return;$("#q"+i).remove();BEANTWORTET++;
+  if(!document.querySelector(".frage")){BEANTWORTET=0;await rechnen(true);if(E.offen.length)toast(`Es sind ${E.offen.length} Folgefragen entstanden.`);else toast("Alle Klärungen erledigt.");}}
+
+function pill(s){const c=/endg/.test(s)?"ok":/vorl/.test(s)?"warn":/ausgest|unbeurt/.test(s)?"":"";return `<span class="pill ${c}">${esc(s)}</span>`;}
+function tabErgebnisse(){if(!E.studenten.length){$("#inh").innerHTML=`<div class="leer">Keine Studenten.</div>`;return;}
+  const sw=Object.entries(Z.status_werte);
+  let h=`<div class="tabelle"><table><tr><th>Student</th><th>Matrikelnr.</th>${E.teile.map(t=>`<th title="${esc(t.id)}">${esc(t.name)}${t.max!=null?` (${t.max})`:""}</th>`).join("")}<th>Summe</th><th>Note</th><th>Status</th><th>Fehltermine</th><th>Mitarbeit</th><th>Status festlegen</th></tr>`;
+  for(const s of E.studenten){h+=`<tr><td><b>${esc(s.nachname)}</b>, ${esc(s.vorname)}${s.hinweise.length?`<br><small style="color:var(--mut)">${s.hinweise.map(esc).join(" ")}</small>`:""}</td><td class="mono">${esc(s.matrikel)}</td>`;
+    for(const t of E.teile){const x=s.teile[t.id];const c=x.positiv===false?"neg":(x.status!=="ok"&&!t.zusatz?"off":"");h+=`<td class="z ${c}" title="${esc(x.status)}">${x.wert!==""?esc(x.wert):(t.zusatz?"":esc(x.status))}</td>`;}
+    h+=`<td class="z"><b>${esc(s.summe)}</b></td><td><b>${esc(s.note)}</b></td><td>${pill(s.status)}</td><td class="z">${s.abwesend}</td><td class="z">${s.mitarbeit}</td><td><select onchange="setzeStatus('${esc(s.key)}',this.value)"><option value="">automatisch</option>${sw.map(([k,v])=>`<option value="${k}" ${s.status_override===k?"selected":""}>${esc(v)}</option>`).join("")}</select></td></tr>`;}
+  h+=`</table></div><p class="sub" style="margin-top:8px">Rot: Teilleistung nicht positiv. Gelb: fehlt oder noch offen. Die vollständige Masterliste mit Anwesenheits- und Mitarbeitsübersicht liegt als Excel-Datei vor. <button class="klein" onclick="oeffne(E.master)">Masterliste öffnen</button></p>`;
+  $("#inh").innerHTML=h;}
+async function setzeStatus(key,wert){const r=await versuch(()=>api("status",{pfad:K,key,wert}));if(r){E=r;zeige();}}
+
+function tabEntwuerfe(){if(!E.studenten.length){$("#inh").innerHTML=`<div class="leer">Keine Studenten.</div>`;return;}
+  if(!VKEY)VKEY=E.studenten[0].key;const n=E.offen.length;
+  let h=n?`<div class="hinweis">Es gibt noch ${n} offene Klärungen. Entwürfe werden erst danach erstellt.</div>`:"";
+  h+=`<div class="card zeile"><button class="pri" ${n?"disabled":""} onclick="entwuerfe('outlook')">Entwürfe in Outlook anlegen</button><button ${n?"disabled":""} onclick="entwuerfe('datei')">Als .eml-Entwürfe und Serienbrief-Datei speichern</button><span class="sub" style="margin:0">Es wird nichts versendet. Die Entwürfe lassen sich in Outlook einzeln prüfen und bearbeiten.</span></div>`;
+  h+=`<div class="split"><div class="liste">${E.studenten.map(s=>`<a class="${VKEY===s.key?"akt":""}" onclick="VKEY='${esc(s.key)}';tabEntwuerfe()">${esc(s.nachname)}, ${esc(s.vorname)}<small>${s.email?esc(s.email):"keine E-Mail-Adresse"} · ${esc(s.note)}</small></a>`).join("")}</div><iframe id="vor" sandbox=""></iframe></div>`;
+  $("#inh").innerHTML=h;
+  fetch(`/api/vorschau?pfad=${encodeURIComponent(K)}&key=${encodeURIComponent(VKEY)}`,{headers:{"X-Token":T}}).then(async r=>{const t=await r.text();$("#vor").srcdoc=r.ok?t:`<p style="font-family:sans-serif;color:#b42318;padding:16px">${esc((()=>{try{return JSON.parse(t).fehler}catch(e){return t}})())}</p>`;});}
+async function entwuerfe(art){const r=await versuch(()=>api("entwuerfe",{pfad:K,art}));if(!r)return;
+  let m=art==="outlook"?`${r.outlook} Entwürfe im Outlook-Ordner „Entwürfe“ angelegt.`:`${r.eml} Entwürfe und Serienbrief-Datei gespeichert.`;
+  if(r.ohne_email.length)m+=` Ohne E-Mail-Adresse: ${r.ohne_email.join("; ")}.`;toast(m);if(r.ordner)oeffne(r.ordner);}
+
+async function tabProtokoll(){const ent=await versuch(()=>api("entscheidungen",{pfad:K}))||[];
+  let h="";
+  if(E.warnungen.length)h+=`<div class="card"><b>Warnungen</b><ul class="k">${E.warnungen.map(w=>`<li>${esc(w)}</li>`).join("")}</ul></div>`;
+  if(E.kontrolle.length)h+=`<div class="card"><b>Rechenkontrolle: Abweichungen zwischen App und Ihren Dateien</b><table style="margin-top:8px"><tr><th>Student</th><th>Feld</th><th>App</th><th>Datei</th><th>Quelle</th></tr>${E.kontrolle.map(k=>`<tr>${k.map(x=>`<td>${esc(x)}</td>`).join("")}</tr>`).join("")}</table></div>`;
+  h+=`<div class="card"><b>Ihre Entscheidungen (${ent.length})</b>${ent.length?`<div class="tabelle" style="max-height:300px;margin-top:8px"><table><tr><th>Zeit</th><th>Frage</th><th>Antwort</th><th></th></tr>${ent.map(e=>`<tr><td class="mono">${esc((e.zeit||"").slice(0,16).replace("T"," "))}</td><td>${esc(e.frage)}</td><td>${esc(e.antwort)}</td><td><button class="klein" onclick="zurueck('${esc(e.id)}')">zurücknehmen</button></td></tr>`).join("")}</table></div>`:`<p class="sub">Noch keine.</p>`}</div>`;
+  h+=`<div class="card"><div class="zeile"><b>Automatische Schritte (${E.protokoll_gesamt})</b><input id="pf" placeholder="Filter" oninput="protFilter()" style="margin-left:auto"></div><div class="tabelle" style="max-height:340px;margin-top:8px"><table id="pt"></table></div></div>`;
+  $("#inh").innerHTML=h;protFilter();}
+function protFilter(){const f=($("#pf").value||"").toLowerCase();const rows=E.protokoll.filter(p=>!f||p.join(" ").toLowerCase().includes(f)).slice(0,500);$("#pt").innerHTML=`<tr><th>Schritt</th><th>Objekt</th><th>Ergebnis</th></tr>`+rows.map(p=>`<tr>${p.map(x=>`<td>${esc(x)}</td>`).join("")}</tr>`).join("");}
+async function zurueck(id){const r=await versuch(()=>api("entscheidung_loeschen",{pfad:K,id}));if(r){E=r;zeige();}}
+
+const TYPEN={liste:"Punkte aus einer Liste",anwesenheit:"Anwesenheit (aus Logbuch)",mitarbeit:"Mitarbeit (aus Logbuch)",anwesenheit_mitarbeit:"Anwesenheit und Mitarbeit gemeinsam"};
+async function tabBewertung(){const c=await versuch(()=>api("kurs_laden",{pfad:K}));if(!c)return;CFG=c;
+  const r=await versuch(()=>api("profil_laden",{id:c.profil}));if(!r)return;P=r.profil;const dl=await quellenLaden();
+  const aw=P.anwesenheit||{},mi=P.mitarbeit||{};const andere=r.verwendet_von.filter(x=>x!==kursInfo(K).semester+" / "+kursInfo(K).name);
+  let h=dl;
+  if(andere.length)h+=`<div class="hinweis">Dieses Profil gilt auch für: ${andere.map(esc).join("; ")}. Änderungen wirken dort ebenfalls. Für eine eigene Fassung „Als neues Profil speichern“ wählen.</div>`;
+  if(!QUELLEN.length)h+=`<div class="hinweis">Im Ordner liegen noch keine Listen. Die Spalten lassen sich zuordnen, sobald die Dateien dort liegen.</div>`;
+  h+=`<div class="card"><form class="f" onsubmit="return false"><label>Profil</label><input value="${esc(P.id)}" readonly><label>Bezeichnung</label><input id="b_bez" value="${esc(P.bezeichnung||"")}"></form></div>`;
+  h+=`<div class="card"><b>Teilleistungen</b><div style="overflow:auto"><table id="b_tl" style="margin-top:8px"><tr><th>Bezeichnung</th><th>Kürzel</th><th>Art</th><th>Höchstpunkte</th><th>Spalte in Ihren Listen</th><th>Positiv</th><th>Zusatzpunkte</th><th></th></tr></table></div><p style="margin:10px 0 0"><button onclick="tlZeile({typ:'liste',positiv:'anteil'})">＋ Teilleistung</button> <span class="sub" id="b_sum"></span></p><p class="sub" style="margin:8px 0 0">Bei „Punkte aus einer Liste“ ist die Spalte die Quelle der Punkte. Bei Anwesenheit und Mitarbeit berechnet die App die Punkte aus dem Logbuch; eine angegebene Spalte dient dann nur dem Vergleich.</p></div>`;
+  h+=`<div class="card"><b>Regeln</b><form class="f" style="margin-top:8px" onsubmit="return false"><label>Frei versäumbare Termine</label><input id="b_frei" type="number" min="0" value="${aw.frei_versaeumbar??0}"><label>Weitere Fehltermine mit Kompensation</label><input id="b_komp" type="number" min="0" value="${aw.mit_kompensation??0}"><label>Verspätungen: Rückfrage ab</label><input id="b_wdh" type="number" min="0" value="${aw.sonderfall_wiederholt_ab??2}"><label>Punkte je Mitarbeitseintrag</label><input id="b_ppe" type="number" step="0.5" value="${mi.punkte_pro_eintrag??1}"><label>Multiplikator der Mitarbeit</label><input id="b_mult" type="number" step="0.5" value="${mi.multiplikator??1}"><label>Mitarbeitseinträge je Termin ohne Rückfrage</label><input id="b_mpt" type="number" min="0" value="${mi.max_pro_termin??1}"><label>Positiv ab Anteil der Höchstpunkte (%)</label><input id="b_ant" type="number" min="0" max="100" value="${Math.round((P.positiv_anteil_standard??0.5)*100)}"></form></div>`;
+  h+=`<div class="card"><b>Notenschlüssel</b><table id="b_ns" style="margin-top:8px;max-width:520px"><tr><th>Gesamtpunkte</th><th>Note</th><th></th></tr></table><p style="margin:10px 0 0"><button onclick="nsZeile('', '')">＋ Stufe</button> <span class="sub">Die letzte Zeile ohne Grenze gilt für alle höheren Punktezahlen.</span></p><form class="f" style="margin-top:12px" onsubmit="return false"><label>Note bei nicht positiver Teilleistung</label><input id="b_neg" value="${esc(P.negativ_note||"")}"><label>Vergleichsspalte Gesamtpunkte</label><input id="b_kg" list="dl" value="${esc((P.kontrollspalten_gesamt||[]).join(", "))}"><label>Vergleichsspalte Note</label><input id="b_kn" list="dl" value="${esc((P.kontrollspalten_note||[]).join(", "))}"></form></div>`;
+  h+=`<div class="zeile"><button class="pri" onclick="profilSpeichern(false)">Speichern und neu verarbeiten</button><button onclick="profilSpeichern(true)">Als neues Profil speichern …</button></div>`;
+  $("#inh").innerHTML=h;for(const t of P.teilleistungen||[])tlZeile(t);for(const g of P.notenschluessel||[])nsZeile(g.unter??"",g.note);summe();}
+function tlZeile(t){const tr=document.createElement("tr");const pos=typeof t.positiv==="number"?"zahl":(t.positiv||"anteil");const sp=(t.typ==="liste"||!t.typ?t.spalten:t.kontrolle)||[];
+  tr.innerHTML=`<td><input class="t_name" value="${esc(t.name||"")}" style="width:150px"></td><td><input class="t_id mono" value="${esc(t.id||"")}" style="width:95px"></td><td><select class="t_typ" style="width:180px" onchange="tlArt(this)">${Object.entries(TYPEN).map(([k,v])=>`<option value="${k}" ${t.typ===k?"selected":""}>${v}</option>`).join("")}</select><div class="t_extra" style="margin-top:4px"></div></td><td><input class="t_max" type="number" step="0.5" value="${t.max??""}" style="width:70px" oninput="summe()"></td><td><input class="t_sp" list="dl" value="${esc(sp.join(", "))}" style="width:170px"></td><td><select class="t_pos" style="width:165px" onchange="this.nextElementSibling.style.display=this.value==='zahl'?'':'none'"><option value="anteil" ${pos==="anteil"?"selected":""}>ab Standardanteil</option><option value="zahl" ${pos==="zahl"?"selected":""}>ab Punktezahl</option><option value="erfuellt" ${pos==="erfuellt"?"selected":""}>wenn Anwesenheitspflicht erfüllt</option><option value="keine" ${pos==="keine"?"selected":""}>keine Mindestgrenze</option></select><input class="t_posz" type="number" step="0.5" style="width:70px;${pos==="zahl"?"":"display:none"}" value="${typeof t.positiv==="number"?t.positiv:""}"></td><td style="text-align:center"><input class="t_zus" type="checkbox" ${t.zusatz?"checked":""} onchange="summe()"></td><td><button class="klein" onclick="this.closest('tr').remove();summe()">entfernen</button></td>`;
+  tr._t=t;$("#b_tl").appendChild(tr);tlArt(tr.querySelector(".t_typ"));summe();}
+function tlArt(sel){const tr=sel.closest("tr"),t=tr._t||{},x=tr.querySelector(".t_extra");
+  if(sel.value==="anwesenheit_mitarbeit")x.innerHTML=`<small>davon für Anwesenheit: <input class="t_awp" type="number" step="0.5" style="width:70px" value="${t.anwesenheit_punkte??""}" placeholder="Hälfte"></small>`;
+  else if(sel.value==="mitarbeit")x.innerHTML=`<small><label><input class="t_kap" type="checkbox" ${t.kappen===false?"":"checked"}> bei Höchstpunkten kappen</label></small>`;
+  else x.innerHTML="";}
+function nsZeile(unter,note){const tr=document.createElement("tr");tr.innerHTML=`<td>unter <input class="n_u" type="number" step="0.5" style="width:90px" value="${unter}" placeholder="(keine)"></td><td><input class="n_n" value="${esc(note)}"></td><td><button class="klein" onclick="this.closest('tr').remove()">entfernen</button></td>`;$("#b_ns").appendChild(tr);}
+function summe(){let s=0;document.querySelectorAll("#b_tl tr").forEach(tr=>{const m=tr.querySelector(".t_max");if(m&&!tr.querySelector(".t_zus").checked)s+=parseFloat(m.value)||0;});const e=$("#b_sum");if(e)e.textContent=`Summe der Höchstpunkte ohne Zusatzpunkte: ${String(s).replace(".",",")}`;}
+function profilLesen(){const liste=s=>s.split(",").map(x=>x.trim()).filter(Boolean);const num=v=>v===""?null:parseFloat(v);const p={...P};
+  p.bezeichnung=$("#b_bez").value.trim();p.teilleistungen=[];
+  document.querySelectorAll("#b_tl tr").forEach(tr=>{if(!tr.querySelector(".t_id"))return;const typ=tr.querySelector(".t_typ").value,pos=tr.querySelector(".t_pos").value;
+    const t={id:tr.querySelector(".t_id").value.trim(),name:tr.querySelector(".t_name").value.trim(),typ,max:num(tr.querySelector(".t_max").value)};
+    if(!t.name)t.name=t.id;const sp=liste(tr.querySelector(".t_sp").value);if(typ==="liste")t.spalten=sp;else if(sp.length)t.kontrolle=sp;
+    t.positiv=pos==="zahl"?(num(tr.querySelector(".t_posz").value)??0):pos;if(tr.querySelector(".t_zus").checked)t.zusatz=true;
+    const awp=tr.querySelector(".t_awp");if(awp&&awp.value!=="")t.anwesenheit_punkte=parseFloat(awp.value);const kap=tr.querySelector(".t_kap");if(kap)t.kappen=kap.checked;
+    p.teilleistungen.push(t);});
+  p.anwesenheit={frei_versaeumbar:+$("#b_frei").value,mit_kompensation:+$("#b_komp").value,sonderfall_wiederholt_ab:+$("#b_wdh").value};
+  p.mitarbeit={punkte_pro_eintrag:+$("#b_ppe").value,multiplikator:+$("#b_mult").value,max_pro_termin:+$("#b_mpt").value};
+  p.positiv_anteil_standard=(+$("#b_ant").value)/100;p.negativ_note=$("#b_neg").value.trim();
+  p.kontrollspalten_gesamt=liste($("#b_kg").value);p.kontrollspalten_note=liste($("#b_kn").value);
+  const ns=[];document.querySelectorAll("#b_ns tr").forEach(tr=>{const n=tr.querySelector(".n_n");if(n&&n.value.trim())ns.push({unter:num(tr.querySelector(".n_u").value),note:n.value.trim()});});
+  ns.sort((a,b)=>(a.unter??Infinity)-(b.unter??Infinity));p.notenschluessel=ns.length?ns:null;p.zu_bestaetigen=[];return p;}
+async function profilSpeichern(alsNeu){const p=profilLesen();
+  if(alsNeu){const k=kursInfo(K);const n=prompt("Name des neuen Profils:",`${k.name}_${k.semester}`);if(!n)return;p.kopiert_von=p.id;p.id=n.trim();}
+  const r=await versuch(()=>api("profil_speichern",{profil:p,neu:alsNeu}));if(!r)return;
+  if(alsNeu)await versuch(()=>api("kurs_speichern",{pfad:K,cfg:{profil:r.id}}));
+  await laden();await rechnen(true);TAB="bewertung";zeige();toast("Bewertung gespeichert.");}
+
+const FELDER=[["lv_titel","Titel der Lehrveranstaltung","erscheint im Report und im Betreff"],["profil","Bewertungsprofil",""],["logbuch_lv","Kürzel im Logbuch","z. B. JAT; mehrere mit Komma"],["termin_lv","LV-Nummern in der Terminliste","leer = alle Termine der Datei"],["verbunden_mit","Verbundene Lehrveranstaltungen","relative Ordner, z. B. ..\\WIA_UE; Termine zählen gemeinsam"],["vorlage","Report-Vorlage (Word)",""],["betreff","Betreff der E-Mail","Platzhalter wie {LV_TITEL} möglich"],["absender_name","Name unter dem Report",""],["absender_email","Outlook-Konto (E-Mail-Adresse)","leer = Standardkonto"],["rueckmeldefrist","Rückmeldefrist","z. B. Freitag, 2026-02-06"],["stichtag","Stichtag (JJJJ-MM-TT)","leer = heute; spätere Termine gelten als ausstehend"],["textfelder","Spalte mit Kommentar für den Report","Spalte Ihrer Punkteliste, deren Text im Report unter „Kommentar“ erscheint"]];
+let CFG=null,P=null,QUELLEN=[];
+async function quellenLaden(){const q=await versuch(()=>api("quellen",{pfad:K}))||[];QUELLEN=q;return `<datalist id="dl">${q.flatMap(t=>t.spalten).map(x=>`<option value="${esc(x)}">`).join("")}</datalist>`;}
+async function tabEinstellungen(){const c=await versuch(()=>api("kurs_laden",{pfad:K}));if(!c)return;CFG=c;
+  const val=k=>k==="textfelder"?((c[k]||{}).KOMMENTAR||[]).join(", "):Array.isArray(c[k])?c[k].join(", "):c[k]||"";
+  let h=await quellenLaden()+`<div class="card"><form class="f" onsubmit="return false">`;
+  for(const [k,l,hi] of FELDER){h+=`<label>${l}</label>`;
+    if(k==="profil")h+=`<select id="e_${k}">${Z.profile.map(p=>`<option value="${esc(p.id)}" ${c.profil===p.id?"selected":""}>${esc(p.id)} – ${esc(p.bezeichnung)}</option>`).join("")}</select>`;
+    else if(k==="vorlage")h+=`<select id="e_${k}"><option value="">(keine)</option>${[...new Set([...Z.vorlagen,c.vorlage].filter(Boolean))].map(v=>`<option ${c.vorlage===v?"selected":""}>${esc(v)}</option>`).join("")}</select>`;
+    else if(k==="textfelder")h+=`<input id="e_${k}" list="dl" value="${esc(val(k))}">`;
+    else h+=`<input id="e_${k}" value="${esc(val(k))}">`;
+    if(hi)h+=`<small>${hi}</small>`;}
+  h+=`</form><div class="zeile" style="margin-top:14px"><button class="pri" onclick="speichern()">Speichern und neu verarbeiten</button><button onclick="oeffne(Z.wurzel+'/_vorlagen')">Vorlagenordner öffnen</button><button onclick="tab('bewertung')">Bewertung bearbeiten</button></div></div>`;
+  $("#inh").innerHTML=h;}
+async function speichern(){const cfg={};const liste=s=>s.split(",").map(x=>x.trim()).filter(Boolean);
+  for(const [k] of FELDER){const v=$("#e_"+k).value;if(["logbuch_lv","termin_lv","verbunden_mit"].includes(k))cfg[k]=liste(v);else if(k==="textfelder"){cfg[k]={...(CFG.textfelder||{})};if(liste(v).length)cfg[k].KOMMENTAR=liste(v);else delete cfg[k].KOMMENTAR;}else cfg[k]=v.trim();}
+  const r=await versuch(()=>api("kurs_speichern",{pfad:K,cfg}));if(r){await laden();TAB="uebersicht";await rechnen();toast("Gespeichert.");}}
+
+function einrichten(k){$("#main").innerHTML=`<h2>${esc(k.name)}</h2><div class="sub">${esc(k.semester)} · Ordner vorhanden, aber noch nicht eingerichtet</div><div class="card">${kursForm(k.semester,k.name,true)}<div class="zeile" style="margin-top:14px"><button class="pri" onclick="kursAnlegen()">Einrichten</button></div></div>`;}
+function kursForm(sem,name,fest){const alle=Z.semester.flatMap(s=>s.kurse.filter(k=>k.eingerichtet).map(k=>({...k,sem:s.name})));
+  return `<form class="f" onsubmit="return false"><label>Semester</label>${fest?`<input id="n_sem" value="${esc(sem)}" readonly>`:`<select id="n_sem">${Z.semester.map(s=>`<option>${esc(s.name)}</option>`).join("")}</select>`}<label>Ordnername der Lehrveranstaltung</label><input id="n_name" value="${esc(name||"")}" ${fest?"readonly":""} placeholder="z. B. JAT_EDV"><label>Kopie des Vorsemesters</label><select id="n_von" onchange="document.querySelectorAll('.nurneu').forEach(e=>e.disabled=!!this.value)"><option value="">(keine – neu anlegen)</option>${alle.map(k=>`<option value="${esc(k.pfad)}">${esc(k.sem)} / ${esc(k.name)}</option>`).join("")}</select><small>Die Kopie übernimmt Profil, Vorlage und Listenzuordnungen, aber keine personenbezogenen Entscheidungen.</small><label>Bewertungsprofil</label><select id="n_profil" class="nurneu"><option value="__neu__">(neues, leeres Bewertungsprofil)</option>${Z.profile.map(p=>`<option value="${esc(p.id)}">${esc(p.id)} – ${esc(p.bezeichnung)}</option>`).join("")}</select><label>Titel</label><input id="n_titel" class="nurneu" placeholder="z. B. JAT &amp; EDV"><label>Kürzel im Logbuch</label><input id="n_log" class="nurneu" placeholder="z. B. JAT"><label>Report-Vorlage</label><select id="n_vorlage" class="nurneu"><option value="">(keine)</option>${Z.vorlagen.map(v=>`<option>${esc(v)}</option>`).join("")}</select></form>`;}
+function dlgKurs(){if(!Z.semester.length){dlgSemester();return;}$("#dlg").innerHTML=`<h2>Neue Lehrveranstaltung</h2><div class="sub">Legt den Ordner an. Danach die Listen der Universität hineinlegen.</div>${kursForm("", "", false)}<div class="zeile" style="margin-top:16px;justify-content:flex-end"><button onclick="$('#dlg').close()">Abbrechen</button><button class="pri" onclick="kursAnlegen()">Anlegen</button></div>`;$("#dlg").showModal();}
+async function kursAnlegen(){const d={semester:$("#n_sem").value,name:$("#n_name").value,von:$("#n_von").value,profil:$("#n_von").value?"":$("#n_profil").value,lv_titel:$("#n_von").value?"":$("#n_titel").value,logbuch_lv:$("#n_von").value?"":$("#n_log").value,vorlage:$("#n_von").value?"":$("#n_vorlage").value};
+  if(!d.name.trim()){toast("Bitte einen Ordnernamen eingeben.",true);return;}
+  const r=await versuch(()=>api("kurs_anlegen",d));if(r){Z=r;if($("#dlg").open)$("#dlg").close();const s=Z.semester.find(s=>s.name===d.semester);const k=s.kurse.find(k=>k.name===d.name.trim());await waehle(k.pfad);toast("Lehrveranstaltung angelegt.");}}
+function dlgSemester(){$("#dlg").innerHTML=`<h2>Neues Semester</h2><form class="f" onsubmit="return false"><label>Ordnername</label><input id="s_name" placeholder="z. B. 2026W"></form><div class="zeile" style="margin-top:16px;justify-content:flex-end"><button onclick="$('#dlg').close()">Abbrechen</button><button class="pri" onclick="semAnlegen()">Anlegen</button></div>`;$("#dlg").showModal();}
+async function semAnlegen(){const r=await versuch(()=>api("semester_anlegen",{name:$("#s_name").value}));if(r){Z=r;nav();$("#dlg").close();}}
+function dlgProfil(){$("#dlg").innerHTML=`<h2>Profil kopieren</h2><div class="sub">Die Kopie liegt danach im Profilordner und kann dort angepasst werden.</div><form class="f" onsubmit="return false"><label>Vorlage</label><select id="p_alt">${Z.profile.map(p=>`<option>${esc(p.id)}</option>`).join("")}</select><label>Neuer Name</label><input id="p_neu" placeholder="z. B. JAT_EDV_2026-27"></form><div class="zeile" style="margin-top:16px;justify-content:flex-end"><button onclick="$('#dlg').close()">Abbrechen</button><button class="pri" onclick="profilKopieren()">Kopieren</button></div>`;$("#dlg").showModal();}
+async function profilKopieren(){const r=await versuch(()=>api("profil_kopieren",{alt:$("#p_alt").value,neu:$("#p_neu").value.trim()}));if(r){$("#dlg").close();await laden();if(TAB==="einstellungen")tabEinstellungen();toast("Profil kopiert.");}}
+async function oeffne(p){await versuch(()=>api("oeffnen",{pfad:p}));}
+
+setInterval(async()=>{try{await api("puls",{});if(K&&E&&WACHE&&!$("#dlg").open&&!BEANTWORTET){const a=await api("aenderung",{pfad:K});if(STAND!==null&&a.stand!==STAND){STAND=a.stand;if(TAB!=="einstellungen"){await rechnen(true);toast("Neue oder geänderte Dateien verarbeitet.");}}}}catch(e){}},20000);
+laden().catch(e=>toast(e.message,true));
+</script>
+</body>
+</html>

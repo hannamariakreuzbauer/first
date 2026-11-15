@@ -16,8 +16,11 @@ test = ["pytest>=8"]
 [project.scripts]
 lvtool = "lvtool.cli:main"
 
+[project.gui-scripts]
+lv-tool = "lvtool.app:main"
+
 [tool.setuptools.packages.find]
 include = ["lvtool*"]
 
 [tool.setuptools.package-data]
-lvtool = ["profil_vorlagen/*.json"]
+lvtool = ["profil_vorlagen/*.json", "ui.html"]

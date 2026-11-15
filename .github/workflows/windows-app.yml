@@ -1,0 +1,33 @@
+name: Windows-App
+
+on:
+  push:
+    branches: ["**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bauen:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Abhängigkeiten
+        run: python -m pip install ".[outlook,test]" pyinstaller
+      - name: Tests
+        run: python -m pytest -q
+      - name: LV-Tool.exe bauen
+        run: >
+          pyinstaller --noconfirm --onefile --windowed --name LV-Tool --paths .
+          --add-data "lvtool/ui.html;lvtool"
+          --add-data "lvtool/profil_vorlagen;lvtool/profil_vorlagen"
+          --hidden-import win32com.client --hidden-import pythoncom
+          packaging/start.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LV-Tool-Windows
+          path: dist/LV-Tool.exe

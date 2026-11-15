@@ -135,7 +135,44 @@ def test_originale_unveraendert(kurs):
     assert vorher == nachher
 
 
-def test_jat_vorlage(tmp_path):
-    v = R.erstelle_jat_vorlage(tmp_path / "jat.docx")
-    ph = R.platzhalter_der_vorlage(v)
-    assert {"TEST_30", "HUE_1_40", "AW_SCORE_10", "MIA_ALL_10", "RECH_10", "EXTRA_SCORE", "KOMMENTAR"} <= ph
+def test_standardvorlage_passt_zu_jedem_profil(kurs, tmp_path):
+    erg = lauf_bis_fertig(kurs)
+    for pid in C.list_profiles(tmp_path):
+        erg.profil = C.load_profile(tmp_path, pid)
+        ph = R.platzhalter_der_vorlage(R.vorlage_pfad(erg))
+        assert "TABELLE_TEILLEISTUNGEN" in ph and "NOTENSCHLUESSEL" in ph
+    m = R.entwuerfe(lauf_bis_fertig(kurs))[0]
+    assert "Test (30):" in m["text"] and "ab 87,5 Punkten: 1 (SG)" in m["text"]
+    assert "<table" in m["html"] and "_tabelle_html" not in m["html"]
+
+
+def test_app_api(kurs, tmp_path, monkeypatch):
+    from lvtool import app
+    monkeypatch.setenv("APPDATA", str(tmp_path / "_appdata"))
+    app.CACHE.clear()
+    app.aktion("wurzel", {"pfad": str(tmp_path)})
+    z = app.zustand()
+    assert z["semester"][0]["kurse"][0]["eingerichtet"]
+    e = app.aktion("verarbeiten", {"pfad": str(kurs)})
+    assert e["offen"]
+    for _ in range(10):
+        if not e["offen"]:
+            break
+        for q in e["offen"]:
+            app.aktion("antwort", {"pfad": str(kurs), "id": q["id"], "wert": standard(q)})
+        e = app.aktion("verarbeiten", {"pfad": str(kurs)})
+    assert not e["offen"] and len(e["studenten"]) == 8
+    # Bewertung in der App ändern: neues Profil mit anderer Teilleistung
+    p = app.aktion("profil_laden", {"id": "BEISPIEL"})["profil"]
+    p["id"] = "NEU_2026"
+    p["teilleistungen"] = [t for t in p["teilleistungen"] if t["id"] != "EXTRA_SCORE"]
+    app.aktion("profil_speichern", {"profil": p, "neu": True})
+    app.aktion("kurs_speichern", {"pfad": str(kurs), "cfg": {"profil": "NEU_2026"}})
+    e = app.aktion("verarbeiten", {"pfad": str(kurs)})
+    assert [t["id"] for t in e["teile"]] == ["AW_MIA_20", "TEST_30", "HUE_50"]
+    spalten = [s for q in app.aktion("quellen", {"pfad": str(kurs)}) for s in q["spalten"]]
+    assert "MAIN:TEST_30" in spalten and "HUE:SCORE_50" in spalten
+    r = app.aktion("entwuerfe", {"pfad": str(kurs), "art": "datei"})
+    assert r["eml"] == 8
+    with pytest.raises(PermissionError):
+        app.aktion("oeffnen", {"pfad": str(tmp_path.parent)})

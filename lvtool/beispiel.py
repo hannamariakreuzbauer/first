@@ -104,33 +104,8 @@ def erzeuge(wurzel: Path, semester="2025W", kurs="BSP_LV", seed=1) -> Path:
 
     if not C.is_course_dir(kdir):
         C.create_course(kdir, profil="BEISPIEL", logbuch_lv=["BSP"], lv_titel="Beispiel-LV",
-                        vorlage="report_beispiel.docx", absender_name="Die LV-Leiterin",
+                        vorlage="report_standard.docx", absender_name="Die LV-Leiterin",
                         rueckmeldefrist="Freitag, 2026-02-06", textfelder={"KOMMENTAR": ["MAIN:COMM_EXT"]})
-    _beispiel_vorlage(wurzel / C.VORLAGENDIR / "report_beispiel.docx")
+    from .report import erstelle_standard_vorlage
+    erstelle_standard_vorlage(wurzel / C.VORLAGENDIR / "report_standard.docx")
     return kdir
-
-
-def _beispiel_vorlage(ziel: Path):
-    import docx
-    d = docx.Document()
-    d.add_paragraph("{{LV_TITEL}}: Student Report", style="Title")
-    d.add_paragraph("Hallo {{VORNAME}},")
-    d.add_paragraph("hier ist dein Bewertungsvorschlag. Rückmeldungen bitte bis {{RUECKMELDEFRIST}}.")
-    d.add_heading("Das Wichtigste in Kürze", level=2)
-    t = d.add_table(rows=0, cols=2)
-    for a, b in (("Matrikelnummer:", "{{MATRIKEL}}"), ("Gesamtpunkte:", "{{SUMME}}"), ("Note:", "{{NOTE}}"),
-                 ("Status:", "{{STATUS}}"), ("Kommentar:", "{{KOMMENTAR}}")):
-        c = t.add_row().cells
-        c[0].text, c[1].text = a, b
-    d.add_paragraph("{{HINWEISE}}")
-    t = d.add_table(rows=0, cols=2)
-    for a, b in (("Anwesenheit und Mitarbeit (20):", "{{AW_MIA_20}}"), ("Test (30):", "{{TEST_30}}"),
-                 ("Hausübung (50):", "{{HUE_50}}"), ("Zusatzpunkte:", "{{EXTRA_SCORE}}")):
-        c = t.add_row().cells
-        c[0].text, c[1].text = a, b
-    d.add_heading("Anwesenheit", level=3)
-    d.add_paragraph("{{ANWESENHEIT_DETAILS}}")
-    d.add_paragraph("Gesamt: {{ANWESENHEIT_SUMME}} von {{TERMINE_ANZAHL}} ({{FEHLTERMINE}} Fehltermine)")
-    d.add_paragraph("{{ABSENDER_NAME}}")
-    ziel.parent.mkdir(parents=True, exist_ok=True)
-    d.save(str(ziel))

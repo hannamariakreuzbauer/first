@@ -51,9 +51,30 @@ def werte(erg: Ergebnis, r: StudentErgebnis) -> dict[str, str]:
         else:
             v[tid] = "–" if te.zusatz else ("fehlt" if te.status == "fehlt" else "offen")
         v[f"MAX_{tid}"] = fmt(te.max)
+    v["KOMMENTAR"] = ""
     for k, txt in r.texte.items():
         v[k] = txt
+    zeilen = [(f"{te.name}" + (f" ({fmt(te.max)})" if te.max is not None else "") + ":", v[tid]) for tid, te in r.teile.items()]
+    zeilen.append(("Gesamt:", fmt(r.summe)))
+    v["TABELLE_TEILLEISTUNGEN"] = "\n".join(f"{a} {b}" for a, b in zeilen)
+    v["_tabelle_html"] = ("<table style='border-collapse:collapse'>" + "".join(
+        f"<tr><td style='padding:2px 12px 2px 0;font-size:11pt'>{html.escape(a)}</td>"
+        f"<td style='padding:2px 0;font-size:11pt;text-align:right'>{html.escape(b)}</td></tr>" for a, b in zeilen) + "</table>")
+    v["NOTENSCHLUESSEL"] = notenschluessel_text(erg.profil)
     return v
+
+
+def notenschluessel_text(profil: dict) -> str:
+    ks = profil.get("notenschluessel") or []
+    out, unten = [], None
+    for g in ks:
+        if unten is None:
+            out.append(f"unter {fmt(float(g['unter']))} Punkten oder mindestens eine fehlende bzw. nicht positive Teilleistung: {g['note']}"
+                       if g.get("unter") is not None else g["note"])
+        else:
+            out.append(f"ab {fmt(float(unten))} Punkten: {g['note']}")
+        unten = g.get("unter")
+    return "\n".join(reversed(out))
 
 
 def platzhalter_der_vorlage(vorlage: Path) -> set[str]:
@@ -110,6 +131,13 @@ def render(vorlage: Path, v: dict) -> tuple[str, str]:
         if tag == "p":
             p = Paragraph(el, d)
             st = _style(p)
+            if p.text.strip() == "{{TABELLE_TEILLEISTUNGEN}}":
+                if liste:
+                    body_html.append("</ul>")
+                    liste = False
+                body_html.append(v.get("_tabelle_html", ""))
+                body_txt.append(v.get("TABELLE_TEILLEISTUNGEN", ""))
+                continue
             inhalt = _runs_html(p, v)
             text = _ersetze(p.text, v)
             if PH.search(p.text) and not PH.sub("", p.text).strip() and not text.strip():
@@ -175,9 +203,18 @@ def vorlage_pfad(erg: Ergebnis) -> Path:
 def entwuerfe(erg: Ergebnis) -> list[dict]:
     vorlage = vorlage_pfad(erg)
     bekannte = set(werte(erg, next(iter(erg.ergebnisse.values()))).keys()) if erg.ergebnisse else set()
+    bekannte.discard("_tabelle_html")
     unbekannt = platzhalter_der_vorlage(vorlage) - bekannte
     if unbekannt:
         raise ValueError("Unbekannte Platzhalter in der Vorlage: " + ", ".join(sorted(unbekannt)))
+    pflicht = {"RUECKMELDEFRIST": "Rückmeldefrist", "ABSENDER_NAME": "Name unter dem Report",
+               "LV_TITEL": "Titel der Lehrveranstaltung"}
+    verwendet = platzhalter_der_vorlage(vorlage)
+    if erg.ergebnisse:
+        probe = werte(erg, next(iter(erg.ergebnisse.values())))
+        fehlt = [lbl for k, lbl in pflicht.items() if k in verwendet and not probe.get(k)]
+        if fehlt:
+            raise ValueError("Bitte zuerst in den Einstellungen ausfüllen: " + ", ".join(fehlt) + ".")
     out = []
     for s in erg.students:
         r = erg.ergebnisse[s.key]
@@ -214,7 +251,7 @@ def schreibe_eml(mails: list[dict], ziel: Path, absender: str = "") -> list[Path
 def schreibe_serienbrief(mails: list[dict], ziel: Path) -> tuple[Path, Path]:
     from openpyxl import Workbook
     ziel.mkdir(parents=True, exist_ok=True)
-    keys = list(mails[0]["werte"].keys()) if mails else []
+    keys = [k for k in mails[0]["werte"] if not k.startswith("_")] if mails else []
     header = ["E_MAIL_AN", "BETREFF"] + keys + ["TEXT"]
     rows = [[m["an"] or "", m["betreff"]] + [m["werte"][k] for k in keys] + [m["text"]] for m in mails]
     wb = Workbook()
@@ -240,6 +277,8 @@ def outlook_entwuerfe(mails: list[dict], konto: str = "") -> int:
     except ImportError as e:
         raise RuntimeError("Outlook-Anbindung braucht Windows, klassisches Outlook und das Paket pywin32 "
                            "(pip install pywin32).") from e
+    import pythoncom  # type: ignore
+    pythoncom.CoInitialize()   # Aufruf kommt aus einem Hintergrund-Thread der App
     ol = win32com.client.Dispatch("Outlook.Application")
     ns = ol.GetNamespace("MAPI")
     ordner = None
@@ -264,67 +303,42 @@ def outlook_entwuerfe(mails: list[dict], konto: str = "") -> int:
     return n
 
 
-# --------------------------------------------------------------------------- Vorlage JAT
+# --------------------------------------------------------------------------- Standardvorlage
 
-def erstelle_jat_vorlage(ziel: Path):
-    """Vorlage nach dem Muster von 02_report_jat_abrechnung.docx, mit Platzhaltern statt Werten."""
+def erstelle_standard_vorlage(ziel: Path):
+    """Vorlage für beliebige Bewertungsprofile: Teilleistungen und Notenschlüssel kommen aus dem Profil."""
     d = docx.Document()
     d.add_paragraph("{{LV_TITEL}}: Student Report", style="Title")
     d.add_paragraph("{{NACHNAME}}, {{VORNAME}}")
     d.add_paragraph("")
     d.add_paragraph("Hallo,")
     d.add_paragraph("soeben habe ich eure Student Reports (insb. mit der für die gesamte LV geltenden Gesamtzahl von "
-                    "Notenpunkten [= NP] und meinem darauf basierenden individuellen Benotungsvorschlag) fertiggestellt. "
+                    "Notenpunkten und meinem darauf basierenden individuellen Benotungsvorschlag) fertiggestellt. "
                     "Ihr findet das alles weiter unten im Mail.")
-    d.add_paragraph("Wie sich die Gesamtnote aus den (insgesamt 100) NP ergibt, kann man anhand der Grenzwerte leicht nachrechnen:")
-    for a, b in (("ab 87,5 NP: ", "1 (SG)"), ("ab 75 NP: ", "2 (GU)"), ("ab 62,5 NP: ", "3 (BE)"), ("ab 50 NP: ", "4 (GN)"),
-                 ("unter 50 NP oder mindestens eine fehlende bzw. nicht genügende Teilleistung: ", "5 (NG)")):
-        p = d.add_paragraph(style="List Bullet")
-        p.add_run(a)
-        p.add_run(b).bold = True
+    d.add_paragraph("Wie sich die Gesamtnote aus den Notenpunkten ergibt, kann man anhand der Grenzwerte leicht nachrechnen:")
+    d.add_paragraph("{{NOTENSCHLUESSEL}}")
     d.add_paragraph("")
-    d.add_paragraph("Bitte beachtet, dass ich mir knappe Ergebnisse nicht ansehe und das natürlich auch nicht berücksichtige. "
-                    "Ferner, dass alles bilateral Vereinbarte durch diesen Report selbstverständlich nicht außer Kraft gesetzt wird "
-                    "und dass irrtümliche Eintragungen keinerlei Ansprüche begründen. Da die Gesamtabrechnung etwas kompliziert war, "
-                    "kann es sein, dass mir da und dort ein Fehler unterlaufen ist. Das ist keine Absicht, und daher bitte ich euch, "
-                    "alles genau zu kontrollieren und euch gegebenenfalls gerne bei mir zu melden. Insbesondere gibt es einige "
-                    "überraschende NG wegen Abwesenheiten. In diesem Fall bitte melden, denn vielleicht lässt sich das ja noch aufklären.")
+    d.add_paragraph("Bitte beachtet, dass alles bilateral Vereinbarte durch diesen Report nicht außer Kraft gesetzt wird und dass "
+                    "irrtümliche Eintragungen keinerlei Ansprüche begründen. Sollte mir ein Fehler unterlaufen sein, bitte ich "
+                    "euch, alles genau zu kontrollieren und euch gegebenenfalls bei mir zu melden.")
     d.add_paragraph("")
     p = d.add_paragraph()
-    p.add_run("Wichtige Termine!").bold = True
-    p = d.add_paragraph(style="List Bullet")
-    p.add_run("Für alle: ").bold = True
-    p.add_run("Bis {{RUECKMELDEFRIST}}, 24:00 Uhr, läuft jetzt die „Rechtsmittelfrist“, innerhalb derer noch Gelegenheit ist, "
-              "über die Noten zu sprechen. Bitte gerne mailen, wenn es aus eurer Sicht offene Punkte gibt.")
-    p = d.add_paragraph(style="List Bullet")
-    p.add_run("Für Verbesserungswillige ").bold = True
-    p.add_run("(gilt nicht für bereits abschließend Beurteilte, insb. auch nicht für 5 (NG), mit denen ich bereits bilateral "
-              "gesprochen habe): Bitte ebenfalls innerhalb der „Rechtsmittelfrist“ mailen, damit wir etwaige Kompensations- "
-              "oder Verbesserungsmöglichkeiten besprechen können.")
-    d.add_paragraph("Für alle anderen, die ich um ein Mail bzw. eine Meldung ersuche: Bitte ebenfalls so schnell wie möglich "
-                    "bei mir melden.", style="List Bullet")
-    d.add_paragraph("")
-    d.add_paragraph("Vielen Dank für die gute Zusammenarbeit und die sehr nette und lustige Atmosphäre! Ich finde, wir können mit "
-                    "dem Ergebnis der LV sehr zufrieden sein, und ich wünsche euch allen alles Gute für den weiteren Verlauf "
-                    "eures Studiums und/oder Lebens!")
+    p.add_run("Rückmeldefrist: ").bold = True
+    p.add_run("Bis {{RUECKMELDEFRIST}} ist Gelegenheit, über die Noten zu sprechen. Bitte mailen, wenn es aus eurer Sicht "
+              "offene Punkte gibt.")
     d.add_paragraph("")
     d.add_paragraph("{{ABSENDER_NAME}}")
     d.add_heading("Ergebnisse", level=1)
     d.add_heading("Das Wichtigste in Kürze", level=2)
     t = d.add_table(rows=0, cols=2)
-    for a, b in (("{{NACHNAME}}, {{VORNAME}}", ""), ("Matrikelnummer:", "{{MATRIKEL}}"), ("Studium:", "{{STUDIUM}}"),
-                 ("E-Mail:", "{{EMAIL}}"), ("Gesamtpunkte:", "{{SUMME}}"), ("Note:", "{{NOTE}}"),
-                 ("Status:", "{{STATUS}}"), ("Kommentar:", "{{KOMMENTAR}}")):
+    for a, b in (("Matrikelnummer:", "{{MATRIKEL}}"), ("Studium:", "{{STUDIUM}}"), ("E-Mail:", "{{EMAIL}}"),
+                 ("Gesamtpunkte:", "{{SUMME}}"), ("Note:", "{{NOTE}}"), ("Status:", "{{STATUS}}"),
+                 ("Kommentar:", "{{KOMMENTAR}}")):
         c = t.add_row().cells
         c[0].text, c[1].text = a, b
     d.add_paragraph("{{HINWEISE}}")
     d.add_heading("Details zur Gesamtbeurteilung", level=2)
-    t = d.add_table(rows=0, cols=2)
-    for a, b in (("Test (30):", "{{TEST_30}}"), ("HUE 1 (40):", "{{HUE_1_40}}"), ("AW-Punkte (10):", "{{AW_SCORE_10}}"),
-                 ("Mitarbeit (10):", "{{MIA_ALL_10}}"), ("Rechercheübung (10):", "{{RECH_10}}"),
-                 ("Sonderpunkte (positiv oder negativ):", "{{EXTRA_SCORE}}"), ("Gesamt:", "{{SUMME}}")):
-        c = t.add_row().cells
-        c[0].text, c[1].text = a, b
+    d.add_paragraph("{{TABELLE_TEILLEISTUNGEN}}")
     d.add_heading("Details zu Anwesenheit und Mitarbeit in den einzelnen Stunden", level=2)
     d.add_heading("Anwesenheit", level=3)
     d.add_paragraph("Man beachte, dass es sich bei diesen Werten um keine Notenpunkte handelt.")
