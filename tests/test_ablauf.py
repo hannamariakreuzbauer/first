@@ -116,7 +116,11 @@ def test_entscheidungen_bleiben_und_kopie_ohne_personen(kurs, tmp_path):
     C.create_course(neu_dir, von=kurs)
     neu = C.decisions_for(neu_dir)
     assert neu.answers and all(v["kategorie"] == "struktur" for v in neu.answers.values())
-    assert C.load_course(neu_dir)["profil"] == "BEISPIEL"
+    # das neue Semester bekommt eine eigene Kopie des Bewertungsprofils
+    assert C.load_course(neu_dir)["profil"] == "BSP_LV_2026S"
+    root = kurs.parent.parent
+    alt_p, neu_p = C.load_profile(root, "BEISPIEL"), C.load_profile(root, "BSP_LV_2026S")
+    assert neu_p["teilleistungen"] == alt_p["teilleistungen"] and neu_p["notenschluessel"] == alt_p["notenschluessel"]
 
 
 def test_status_ausgestiegen(kurs):
@@ -176,3 +180,106 @@ def test_app_api(kurs, tmp_path, monkeypatch):
     assert r["eml"] == 8
     with pytest.raises(PermissionError):
         app.aktion("oeffnen", {"pfad": str(tmp_path.parent)})
+
+
+def test_logbuch_neu_exportiert_entscheidungen_bleiben(kurs):
+    """Neue Zeilen am Anfang und anderer Dateiname dürfen beantwortete Fragen nicht zurückbringen."""
+    import datetime as dt
+
+    import openpyxl
+    lauf_bis_fertig(kurs)
+    lb = kurs.parent / "lv_logbuch.xlsx"
+    wb = openpyxl.load_workbook(lb)
+    ws = wb["SOURCE"]
+    ws.insert_rows(2)
+    for c, v in enumerate([dt.datetime(2025, 10, 1), "Neu", "Person", "neu@x.at", 17777777, 17777777, "Andere [XYZ]",
+                           "Anwesenheits- und Mitarbeits-Vermerk", dt.datetime(2025, 10, 6), dt.datetime(2025, 10, 6), 1, 0], 1):
+        ws.cell(2, c, v)
+    wb.save(kurs.parent / "logbuch_export_neu.xlsx")
+    lb.unlink()
+    erg = run(kurs, C.decisions_for(kurs), STICHTAG)
+    assert not erg.offen
+
+
+def test_ein_logbuch_fuer_mehrere_lv(tmp_path):
+    """Zwei LV im selben Semester teilen sich ein Logbuch; jede sieht nur ihre Einträge und Studenten."""
+    import datetime as dt
+
+    import openpyxl
+    a = erzeuge(tmp_path, kurs="LV_A")
+    b = tmp_path / "2025W" / "LV_B"
+    b.mkdir()
+    # LV_B: eigene Studentenliste (CSV) und Termine, Einträge im selben Logbuch unter [BBB]
+    (b / "teilnehmer.csv").write_text("Familienname;Vorname;Matrikelnummer;E-Mail\nZweit;Zora;12999001;zora@x.at\n"
+                                      "Zweit;Zeno;12999002;zeno@x.at\n", encoding="utf-8")
+    (b / "termine.csv").write_text("DATUM;VON;BIS\n07.10.2025;10:00;11:30\n14.10.2025;10:00;11:30\n", encoding="utf-8")
+    lb = tmp_path / "2025W" / "lv_logbuch.xlsx"
+    wb = openpyxl.load_workbook(lb)
+    ws = wb["SOURCE"]
+    for tag in (7, 14):
+        ws.append([dt.datetime(2025, 10, tag, 18), "Zweit", "Zora", "zora@x.at", 12999001, 12999001, "Zweite LV [BBB]",
+                   "Anwesenheits- und Mitarbeits-Vermerk", dt.datetime(2025, 10, tag), dt.datetime(2025, 10, tag), 1, 1])
+    wb.save(lb)
+    C.create_course(b, profil="VIAVO_v4.1", logbuch_lv=["BBB"])
+    ea = lauf_bis_fertig(a)
+    # Fragen zum gemeinsamen Logbuch (Eintragsart) sind in LV_A beantwortet und gelten auch für LV_B
+    eb = run(b, C.decisions_for(b), STICHTAG)
+    assert not [q for q in eb.offen if "Eintragsart" in q["frage"]]
+    assert len(ea.students) == 8 and len(eb.students) == 2
+    zora = next(s for s in eb.students if s.vorname == "Zora")
+    zeno = next(s for s in eb.students if s.vorname == "Zeno")
+    assert eb.ergebnisse[zora.key].anwesend == 2 and eb.ergebnisse[zora.key].mitarbeit == 2
+    assert eb.ergebnisse[zeno.key].anwesend == 0
+    assert all(zora.key not in d for d in (ea.anw, ea.mia))
+
+
+def test_verbundene_lv_gemeinsamer_fehlterminzaehler(tmp_path):
+    """VO und UE verbunden: Termine beider Teile zählen in einen Zähler."""
+    vo = erzeuge(tmp_path, kurs="WIA_VO")
+    ue = tmp_path / "2025W" / "WIA_UE"
+    ue.mkdir()
+    (ue / "termine.csv").write_text("DATUM;VON;BIS\n07.10.2025;10:00;11:30\n14.10.2025;10:00;11:30\n", encoding="utf-8")
+    C.create_course(ue, profil="BEISPIEL", logbuch_lv=["BSP"])
+    cfg = C.load_course(vo)
+    cfg["verbunden_mit"] = ["../WIA_UE"]
+    C.save_course(vo, cfg)
+    erg = lauf_bis_fertig(vo)
+    assert len(erg.termine) == 12                     # 10 VO + 2 UE
+    assert all(r.abwesend >= 2 for r in erg.ergebnisse.values())   # die UE-Termine hat niemand gemeldet
+
+
+def test_profil_anpassen_und_im_naechsten_semester_wiederverwenden(kurs, tmp_path, monkeypatch):
+    from lvtool import app
+    monkeypatch.setenv("APPDATA", str(tmp_path / "_appdata"))
+    app.CACHE.clear()
+    app.aktion("wurzel", {"pfad": str(tmp_path)})
+    p = app.aktion("profil_laden", {"id": "BEISPIEL"})["profil"]
+    p["id"] = "MEINE_LV_2025W"
+    p["teilleistungen"].append({"id": "REFERAT", "name": "Referat", "typ": "liste", "max": 15, "spalten": ["MAIN:REFERAT"], "positiv": 8})
+    p["notenschluessel"][0]["unter"] = 55
+    app.aktion("profil_speichern", {"profil": p, "neu": True})
+    app.aktion("kurs_speichern", {"pfad": str(kurs), "cfg": {"profil": "MEINE_LV_2025W"}})
+    app.aktion("semester_anlegen", {"name": "2026S"})
+    app.aktion("kurs_anlegen", {"semester": "2026S", "name": "BSP_LV", "von": str(kurs)})
+    neu = tmp_path / "2026S" / "BSP_LV"
+    pid = C.load_course(neu)["profil"]
+    q = app.aktion("profil_laden", {"id": pid})["profil"]
+    assert pid == "BSP_LV_2026S"
+    assert [t["id"] for t in q["teilleistungen"]][-1] == "REFERAT" and q["notenschluessel"][0]["unter"] == 55
+    # Änderung im neuen Semester lässt das alte Profil unberührt
+    q["teilleistungen"] = q["teilleistungen"][:2]
+    app.aktion("profil_speichern", {"profil": q})
+    assert len(app.aktion("profil_laden", {"id": "MEINE_LV_2025W"})["profil"]["teilleistungen"]) == 5
+
+
+def test_hochladen(kurs, tmp_path, monkeypatch):
+    from lvtool import app
+    monkeypatch.setenv("APPDATA", str(tmp_path / "_appdata"))
+    app.aktion("wurzel", {"pfad": str(tmp_path)})
+    r = app.hochladen(str(kurs), "semester", "C:\\x\\neu.csv", b"a;b\n1;2\n", False)
+    assert r["status"] == "gespeichert" and (kurs.parent / "neu.csv").exists()
+    assert app.hochladen(str(kurs), "semester", "neu.csv", b"a;b\n1;2\n", False)["status"] == "unveraendert"
+    assert app.hochladen(str(kurs), "semester", "neu.csv", b"anders", False)["status"] == "vorhanden"
+    assert app.hochladen(str(kurs), "semester", "neu.csv", b"anders", True)["status"] == "gespeichert"
+    with pytest.raises(ValueError):
+        app.hochladen(str(kurs), "kurs", "../../boese.exe", b"x", False)

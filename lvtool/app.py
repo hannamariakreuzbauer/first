@@ -194,6 +194,7 @@ def aktion(name: str, d: dict):
             erg = _erg(str(k))
             q = erg.dec.open.get(d["id"])
             dec = C.decisions_for(k)
+            dec.semesterweit = erg.dec.semesterweit
             dec.answer(d["id"], d["wert"], frage=q.frage if q else "", kategorie=q.kategorie if q else PERSON)
             dec.save()
             erg.dec.answers = dec.answers
@@ -301,6 +302,24 @@ def aktion(name: str, d: dict):
     raise ValueError(f"Unbekannte Aktion {name}")
 
 
+def hochladen(pfad: str, ziel: str, name: str, daten: bytes, ersetzen: bool) -> dict:
+    """Legt eine hochgeladene Datei im LV-Ordner oder (Logbuch) im Semesterordner ab."""
+    from .io_tables import SUPPORTED
+    k = _im_eingang(Path(pfad))
+    ordner = k.parent if ziel == "semester" else k
+    name = Path(name.replace("\\", "/")).name
+    if not name or name.startswith((".", "~$")) or Path(name).suffix.lower() not in SUPPORTED:
+        raise ValueError(f"{name}: Dateityp wird nicht unterstützt (möglich: CSV, XLSX, XML).")
+    p = ordner / name
+    if p.exists() and p.read_bytes() == daten:
+        return {"status": "unveraendert", "name": name}
+    if p.exists() and not ersetzen:
+        return {"status": "vorhanden", "name": name}
+    p.write_bytes(daten)
+    CACHE.pop(str(k), None)
+    return {"status": "gespeichert", "name": name}
+
+
 def vorschau(pfad: str, key: str) -> str:
     from . import report as R
     erg = _erg(pfad)
@@ -355,6 +374,12 @@ class Handler(BaseHTTPRequestHandler):
         u = urlparse(self.path)
         n = int(self.headers.get("Content-Length") or 0)
         try:
+            if u.path == "/api/hochladen":
+                if n > 100 * 1024 * 1024:
+                    raise ValueError("Datei ist größer als 100 MB.")
+                qs = parse_qs(u.query)
+                return self._json(200, hochladen(qs["pfad"][0], qs.get("ziel", ["kurs"])[0], qs["name"][0],
+                                                 self.rfile.read(n), qs.get("ersetzen", ["0"])[0] == "1"))
             d = json.loads(self.rfile.read(n) or b"{}")
             if u.path == "/api/beenden":
                 self._json(200, {"ok": True})
@@ -425,19 +450,59 @@ def _waechter(minuten=3):
             os._exit(0)
 
 
+def _instanz_datei() -> Path:
+    return _settings_path().with_name("instanz.json")
+
+
+def _laufende_instanz() -> str | None:
+    """URL einer bereits laufenden App (zweiter Doppelklick öffnet dann nur ein Fenster)."""
+    import urllib.request
+    try:
+        url = json.loads(_instanz_datei().read_text(encoding="utf-8"))["url"]
+        base, tok = url.split("/?t=")
+        req = urllib.request.Request(base + "/api/zustand", headers={"X-Token": tok})
+        with urllib.request.urlopen(req, timeout=2) as r:
+            return url if r.status == 200 else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _chrome_fenster(chrome: str, url: str):
+    base = Path(os.environ.get("LOCALAPPDATA") or Path.home() / ".cache") / "lvtool" / "chrome-fenster"
+    base.mkdir(parents=True, exist_ok=True)
+    return subprocess.Popen([chrome, f"--app={url}", f"--user-data-dir={base}", "--no-first-run",
+                             "--no-default-browser-check", "--window-size=1360,880"])
+
+
 def main():
-    srv, url = start_server()
+    import time
     chrome = None if "--browser" in sys.argv else chrome_pfad()
-    if chrome:
-        base = Path(os.environ.get("LOCALAPPDATA") or Path.home() / ".cache") / "lvtool" / "chrome-fenster"
-        base.mkdir(parents=True, exist_ok=True)
-        proc = subprocess.Popen([chrome, f"--app={url}", f"--user-data-dir={base}", "--no-first-run",
-                                 "--no-default-browser-check", "--window-size=1360,880"])
-        proc.wait()      # eigenes Chrome-Fenster geschlossen -> App beenden
+    vorhanden = _laufende_instanz()
+    if vorhanden:
+        if chrome:
+            _chrome_fenster(chrome, vorhanden)
+        else:
+            import webbrowser
+            webbrowser.open(vorhanden)
         return
-    import webbrowser
-    webbrowser.open(url)
-    print(f"Google Chrome nicht gefunden; LV-Tool im Standardbrowser geöffnet: {url}", flush=True)
+    srv, url = start_server()
+    try:
+        _instanz_datei().parent.mkdir(parents=True, exist_ok=True)
+        _instanz_datei().write_text(json.dumps({"url": url}), encoding="utf-8")
+    except OSError:
+        pass
+    start = time.time()
+    if chrome:
+        proc = _chrome_fenster(chrome, url)
+        proc.wait()
+        if time.time() - start > 15:
+            return      # eigenes Chrome-Fenster wurde geschlossen -> App beenden
+        # Chrome hat den Start an einen anderen Prozess abgegeben: über Lebenszeichen des Fensters beenden
+    else:
+        import webbrowser
+        webbrowser.open(url)
+        print(f"Google Chrome nicht gefunden; LV-Tool im Standardbrowser geöffnet: {url}", flush=True)
+    LETZTER_PULS["t"] = time.time() + 60
     threading.Thread(target=_waechter, daemon=True).start()
     try:
         threading.Event().wait()

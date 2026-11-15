@@ -7,7 +7,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from . import course as C
-from .decisions import PERSON, STRUKTUR, Decisions, qid
+from .decisions import PERSON, STRUKTUR, TERMIN, Decisions, qid
 from .io_tables import SUPPORTED, Table, TableError, parse_date, parse_date_candidates, parse_number, read_tables
 from .mapping import assign_roles, find_alias_column, resolve_fields
 from .matching import Student, StudentIndex, norm_matrikel, norm_text
@@ -97,8 +97,10 @@ class Ergebnis:
 def fmt(x) -> str:
     if x is None:
         return "–"
-    if isinstance(x, float) and x.is_integer():
-        x = int(x)
+    if isinstance(x, float):
+        x = round(x, 2)
+        if x.is_integer():
+            x = int(x)
     return str(x).replace(".", ",")
 
 
@@ -191,7 +193,7 @@ def load_termine(tabs: list[Table], cfg: dict, dec: Decisions, erg: Ergebnis, ku
                 continue
             anm = row.get(f.get("anmerkung")) if "anmerkung" in f else None
             if anm:
-                a = dec.ask(qid("termin_anm", kursname, d.isoformat(), anm), PERSON,
+                a = dec.ask(qid("termin_anm", kursname, d.isoformat(), anm), TERMIN,
                             f"Termin {d.isoformat()} {row.get(f.get('von')) or ''} hat die Anmerkung „{anm}“. "
                             f"Zählt er als Lehrveranstaltungstermin für Anwesenheit und Mitarbeit?",
                             [("ja", "ja, zählt"), ("nein", "nein, nicht zählen")])
@@ -234,10 +236,11 @@ def _art(wert, dec: Decisions) -> str | None:
             ("ignorieren", "nicht werten")]
     opts.sort(key=lambda o: o[0] != vorschlag)
     opts[0] = (opts[0][0], opts[0][1] + " (Vorschlag)")
-    return dec.ask(qid("logbuch_art", w), STRUKTUR, f"Logbuch: Was bedeutet die Eintragsart „{w}“?", opts)
+    return dec.ask(qid("logbuch_art", w), STRUKTUR, f"Logbuch: Was bedeutet die Eintragsart „{w}“?", opts,
+                   semesterweit=True)
 
 
-def _datum(row, f, termine: set, dec, quelle, ident) -> date | None:
+def _datum(row, f, termine: set, dec, quelle, ident, eid=None) -> date | None:
     roh = [row.get(f[k]) for k in ("datum", "datum2") if k in f and row.get(f[k]) is not None]
     cands = []
     for r in roh:
@@ -250,7 +253,7 @@ def _datum(row, f, termine: set, dec, quelle, ident) -> date | None:
     nahe = sorted({t for c in cands for t in termine if abs((t - c).days) <= 3})
     opts = [(t.isoformat(), t.isoformat()) for t in (treffer or nahe)] + [("__ignorieren__", "Eintrag nicht werten")]
     grund = "passt zu mehreren Terminen" if treffer else "passt zu keinem offiziellen Termin"
-    a = dec.ask(qid("datum", quelle, *map(str, roh)), PERSON,
+    a = dec.ask(qid("datum", eid or quelle, *map(str, roh)), PERSON,
                 f"{quelle} ({ident}): Datumsangabe {' / '.join(map(str, roh)) or '(leer)'} {grund}. Welcher Termin ist gemeint?",
                 opts)
     if a and a != "__ignorieren__":
@@ -276,14 +279,17 @@ def load_logbook(tabs, cfg, dec, idx: StudentIndex, termine: list[Termin], erg: 
                             vorname=row.get(f.get("vorname")) if "vorname" in f else None)
             if not s:
                 continue
+            # stabile Kennung des Eintrags: bleibt gleich, wenn das Logbuch neu exportiert oder umbenannt wird
+            zs = row.get(f["zeitstempel"]) if "zeitstempel" in f else None
+            eid = f"{zs}|{s.key}" if zs else quelle
             art = _art(row.get(f["art"]), dec) if "art" in f else "vermerk"
             if art in (None, "ignorieren"):
                 continue
             text = row.get(f["text"]) if "text" in f else None
             upload = row.get(f["upload"]) if "upload" in f else None
-            d = _datum(row, f, tset, dec, quelle, s.anzeige)
+            d = _datum(row, f, tset, dec, quelle, s.anzeige, eid)
             if art == "sonstiges":
-                a = dec.ask(qid("sonstiges", quelle, s.key, text, upload), PERSON,
+                a = dec.ask(qid("sonstiges", eid, s.key, text, upload), PERSON,
                             f"{quelle}: Sonstiger Eintrag von {s.anzeige}"
                             f"{' zum ' + d.isoformat() if d else ''}. Text: „{text or ''}“"
                             f"{'; Upload: ' + str(upload) if upload else ''}. Wie werten?",
@@ -306,7 +312,7 @@ def load_logbook(tabs, cfg, dec, idx: StudentIndex, termine: list[Termin], erg: 
             elif num is not None:
                 anw = num >= 1
             else:
-                a = dec.ask(qid("anw_wert", quelle, av, text), PERSON,
+                a = dec.ask(qid("anw_wert", eid, av, text), PERSON,
                             f"{quelle}: {s.anzeige} gibt für {d.isoformat()} bei Anwesenheit „{av}“ an"
                             f"{'; Text: „' + str(text) + '“' if text else ''}. Wie werten?",
                             [("anwesend", "anwesend"), ("abwesend", "nicht anwesend"),
@@ -322,7 +328,7 @@ def load_logbook(tabs, cfg, dec, idx: StudentIndex, termine: list[Termin], erg: 
             elif mnum is not None and mnum >= 0:
                 mia = int(mnum)
             else:
-                a = dec.ask(qid("mia_wert", quelle, mv, text), PERSON,
+                a = dec.ask(qid("mia_wert", eid, mv, text), PERSON,
                             f"{quelle}: {s.anzeige} gibt für {d.isoformat()} bei Mitarbeit „{mv}“ an"
                             f"{'; Text: „' + str(text) + '“' if text else ''}. Wie viele Mitarbeitseinträge zählen?",
                             [(str(i), str(i)) for i in range(0, 6)], freitext=True)
@@ -331,7 +337,7 @@ def load_logbook(tabs, cfg, dec, idx: StudentIndex, termine: list[Termin], erg: 
                 mia = int(parse_number(a) or 0)
             # Hinweise im Freitext werden nicht gedeutet, sondern vorgelegt
             if text and HINWEIS_RX.search(str(text)):
-                a = dec.ask(qid("text", quelle, text), PERSON,
+                a = dec.ask(qid("text", eid, text), PERSON,
                             f"{quelle}: {s.anzeige}, {d.isoformat()}: Hinweis im Text „{text}“. Wie werten?",
                             [("normal", "wie angegeben werten"),
                              ("sonder", "wie angegeben, Verspätung bzw. vorzeitiges Verlassen vermerken"),
@@ -607,10 +613,12 @@ def score(erg: Ergebnis, pd: PunkteDaten):
                     for v, q in pd.kontrolle.get((s.key, alias), []):
                         num = parse_number(v)
                         if te.wert is not None and num is not None and abs(num - te.wert) > 0.001:
-                            erg.kontrolle.append((s.anzeige, te.name, fmt(te.wert), fmt(num), q))
+                            berechnet = fmt(te.wert)
                             a = dec.ask(qid("kontrolle", s.key, tl["id"], te.wert, num), PERSON,
                                         f"{s.anzeige}, {te.name}: berechnet {fmt(te.wert)}, in {q} steht {fmt(num)}. Welcher Wert gilt?",
                                         [("berechnet", f"berechneter Wert {fmt(te.wert)}"), ("datei", f"Wert aus Datei {fmt(num)}")])
+                            erg.kontrolle.append((s.anzeige, te.name, berechnet, fmt(num), q,
+                                                  {"datei": "Wert aus Datei gilt", "berechnet": "berechneter Wert gilt"}.get(a, "offen")))
                             if a == "datei":
                                 te.wert, te.quelle = num, q
                             elif a is None:
@@ -655,11 +663,11 @@ def _gesamt(erg: Ergebnis, r: StudentErgebnis, override, pd: PunkteDaten):
         for v, q in pd.kontrolle.get((r.student.key, alias), []):
             num = parse_number(v)
             if num is not None and abs(num - r.summe) > 0.001:
-                erg.kontrolle.append((r.student.anzeige, "Gesamtpunkte", fmt(r.summe), fmt(num), q))
+                erg.kontrolle.append((r.student.anzeige, "Gesamtpunkte", fmt(r.summe), fmt(num), q, "Hinweis"))
     for alias in prof.get("kontrollspalten_note", []):
         for v, q in pd.kontrolle.get((r.student.key, alias), []):
             if r.note and str(v).strip() != r.note:
-                erg.kontrolle.append((r.student.anzeige, "Note", r.note, str(v), q))
+                erg.kontrolle.append((r.student.anzeige, "Note", r.note, str(v), q, "Hinweis"))
 
 
 # --------------------------------------------------------------------------- Gesamtlauf
@@ -672,6 +680,13 @@ def run(kurs_dir: Path, dec: Decisions | None = None, stichtag: date | None = No
     profil = C.load_profile(C.root_of(kurs_dir), cfg["profil"])
     dec = dec or C.decisions_for(kurs_dir)
     dec.open.clear()
+    # Antworten zum gemeinsamen Logbuch gelten für alle Lehrveranstaltungen des Semesters
+    dec.fallback = {}
+    for nachbar in sorted(C.semester_of(kurs_dir).iterdir()):
+        if nachbar.is_dir() and nachbar != kurs_dir and C.is_course_dir(nachbar):
+            for k_, v_ in C.decisions_for(nachbar).answers.items():
+                if v_.get("semesterweit"):
+                    dec.fallback.setdefault(k_, v_["antwort"])
     erg = Ergebnis(kurs_dir, cfg, profil, dec)
     if stichtag is None:
         stichtag = date.fromisoformat(cfg["stichtag"]) if cfg.get("stichtag") else date.today()
@@ -705,6 +720,9 @@ def run(kurs_dir: Path, dec: Decisions | None = None, stichtag: date | None = No
         erg.warnungen.append("Keine offiziellen Termine gefunden.")
 
     load_logbook(rollen["logbuch"], log_cfg, dec, idx, alle, erg, kursname)
+    for (name, n) in sorted(idx.fremd.items(), key=lambda x: -x[1]):
+        erg.protokoll.append(("Nicht in Studentenliste", name, f"{n} Einträge nicht gewertet (keine Person der offiziellen Liste)"))
+    idx.fremd.clear()
     pd = load_points(rollen["punkte"], erg, idx)
     score(erg, pd)
     return erg

@@ -87,6 +87,15 @@ def create_course(course_dir: Path, *, von: Path | None = None, profil: str | No
         neu = decisions_for(course_dir)
         neu.answers = alt.structural_only()
         neu.save()
+        # eigene Fassung des Bewertungsprofils: Änderungen im neuen Semester lassen das alte unberührt
+        root = root_of(course_dir)
+        if cfg.get("profil") and not profil:
+            import re
+            pid = re.sub(r"[^A-Za-z0-9_.\-]+", "_", f"{course_dir.name}_{course_dir.parent.name}")
+            if pid != cfg["profil"]:
+                if pid not in list_profiles(root):
+                    copy_profile(root, cfg["profil"], pid)
+                cfg["profil"] = pid
     else:
         cfg = dict(KURS_STANDARD)
         cfg["bezeichnung"] = course_dir.name

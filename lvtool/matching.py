@@ -66,6 +66,7 @@ class StudentIndex:
             if e:
                 self.by_email[e] = s
         self.by_code: dict[str, Student] = {}
+        self.fremd: dict[str, int] = {}
 
     def register_code(self, s: Student, code):
         c = norm_text(code)
@@ -138,8 +139,11 @@ class StudentIndex:
         nah = self._fuzzy(toks, schwelle=0.85)
         if not kandidaten and not nah:
             # keine plausible Person dieser Lehrveranstaltung: nicht fragen, aber protokollieren
-            protokoll.append(("Nicht in Studentenliste", quelle,
-                              "Eintrag gehört zu keiner Person der offiziellen Liste – nicht gewertet"))
+            name = f"{nachname or ''} {vorname or ''}".strip() or (raw_mats[0] if raw_mats else str(email or codenummer))
+            if "Zeile" in quelle and "../" in quelle:
+                self.fremd[name] = self.fremd.get(name, 0) + 1
+            else:
+                protokoll.append(("Nicht in Studentenliste", quelle, f"{name}: keine Person der offiziellen Liste – nicht gewertet"))
             return None
         ident = (tuple(sorted(mats)), mail, " ".join(sorted(toks)), code)
         q = qid("identitaet", *ident)

@@ -14,6 +14,8 @@ from pathlib import Path
 
 STRUKTUR = "struktur"
 PERSON = "person"
+TERMIN = "termin"      # Entscheidungen zu Terminen: vor den Einzelfällen zu klären
+STUFEN = {STRUKTUR: 0, TERMIN: 1, PERSON: 2}
 
 
 def qid(*parts) -> str:
@@ -36,6 +38,8 @@ class Decisions:
         self.path = Path(path) if path else None
         self.answers: dict[str, dict] = {}
         self.open: dict[str, Question] = {}
+        self.fallback: dict[str, object] = {}     # semesterweite Antworten aus Nachbar-LV
+        self.semesterweit: set[str] = set()
         if self.path and self.path.exists():
             self.answers = json.loads(self.path.read_text(encoding="utf-8"))
 
@@ -43,10 +47,14 @@ class Decisions:
         a = self.answers.get(id_)
         return a["antwort"] if a else None
 
-    def ask(self, id_, kategorie, frage, optionen, kontext=None, freitext=False):
+    def ask(self, id_, kategorie, frage, optionen, kontext=None, freitext=False, semesterweit=False):
         """Liefert die gespeicherte Antwort oder None und merkt die Frage als offen vor."""
         if id_ in self.answers:
             return self.answers[id_]["antwort"]
+        if semesterweit:
+            self.semesterweit.add(id_)
+            if id_ in self.fallback:
+                return self.fallback[id_]
         self.open[id_] = Question(id_, kategorie, frage, list(optionen), kontext or {}, freitext)
         return None
 
@@ -58,6 +66,8 @@ class Decisions:
             "kategorie": kategorie or (q.kategorie if q else PERSON),
             "zeit": datetime.now().astimezone().isoformat(timespec="seconds"),
         }
+        if id_ in self.semesterweit:
+            self.answers[id_]["semesterweit"] = True
 
     def save(self):
         if not self.path:
@@ -71,4 +81,9 @@ class Decisions:
         return {k: v for k, v in self.answers.items() if v.get("kategorie") == STRUKTUR}
 
     def open_list(self) -> list[dict]:
-        return [asdict(q) for q in self.open.values()]
+        """Offene Fragen der jeweils ersten Stufe: erst Zuordnungen, dann Termine, dann Einzelfälle.
+        Spätere Fragen hängen von den früheren ab und würden sich sonst noch ändern."""
+        if not self.open:
+            return []
+        stufe = min(STUFEN.get(q.kategorie, 2) for q in self.open.values())
+        return [asdict(q) for q in self.open.values() if STUFEN.get(q.kategorie, 2) == stufe]

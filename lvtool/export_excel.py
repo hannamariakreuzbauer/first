@@ -72,7 +72,7 @@ def write_master(erg: Ergebnis, ziel: Path) -> Path:
     ws = _sheet(wb, "Klärungen", ["Offene Frage", "Antwortmöglichkeiten", "ID"], offen, {"Offene Frage": 100, "Antwortmöglichkeiten": 50})
     for row in ws.iter_rows(min_row=2):
         row[0].alignment = Alignment(wrap_text=True, vertical="top")
-    _sheet(wb, "Rechenkontrolle", ["Student", "Feld", "App", "Datei", "Quelle"], erg.kontrolle)
+    _sheet(wb, "Rechenkontrolle", ["Student", "Feld", "App", "Datei", "Quelle", "Entscheidung"], erg.kontrolle)
     _sheet(wb, "Warnungen", ["Warnung"], [(w,) for w in erg.warnungen], {"Warnung": 120})
     _sheet(wb, "Protokoll", ["Schritt", "Objekt", "Ergebnis"], erg.protokoll, {"Ergebnis": 90})
     ent = [(v.get("zeit", ""), v.get("frage", ""), str(v.get("antwort")), v.get("kategorie", ""))

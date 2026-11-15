@@ -168,6 +168,9 @@ def assign_roles(tables: list[Table], profil: dict, dec: Decisions, protokoll: l
         sig = signatur(t)
         q = qid("rolle", sig)
         stored = dec.get(q)
+        if not stored and t.source.startswith("../"):
+            dec.semesterweit.add(q)
+            stored = dec.fallback.get(q)
         if stored:
             rolle = stored
         else:

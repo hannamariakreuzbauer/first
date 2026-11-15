@@ -201,6 +201,8 @@ def vorlage_pfad(erg: Ergebnis) -> Path:
 
 
 def entwuerfe(erg: Ergebnis) -> list[dict]:
+    if not erg.students:
+        raise ValueError("Es gibt noch keine Studenten; bitte zuerst die offizielle Studentenliste in den Ordner legen.")
     vorlage = vorlage_pfad(erg)
     bekannte = set(werte(erg, next(iter(erg.ergebnisse.values()))).keys()) if erg.ergebnisse else set()
     bekannte.discard("_tabelle_html")
