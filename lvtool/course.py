@@ -132,7 +132,7 @@ def copy_profile(root: Path, alt: str, neu: str) -> Path:
     return ziel
 
 
-TYPEN = {"liste", "anwesenheit", "mitarbeit", "anwesenheit_mitarbeit"}
+TYPEN = {"liste", "manuell", "anwesenheit", "mitarbeit", "anwesenheit_mitarbeit"}
 
 
 def validate_profile(p: dict):

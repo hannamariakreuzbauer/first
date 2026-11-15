@@ -7,7 +7,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from . import course as C
-from .decisions import PERSON, STRUKTUR, TERMIN, Decisions, qid
+from .decisions import LISTE, PERSON, STRUKTUR, TERMIN, Decisions, qid
 from .io_tables import SUPPORTED, Table, TableError, parse_date, parse_date_candidates, parse_number, read_tables
 from .mapping import assign_roles, find_alias_column, resolve_fields
 from .matching import Student, StudentIndex, norm_matrikel, norm_text
@@ -88,6 +88,15 @@ class Ergebnis:
     protokoll: list = field(default_factory=list)
     kontrolle: list = field(default_factory=list)
     warnungen: list = field(default_factory=list)
+    neu_studenten: list = field(default_factory=list)   # seit dem letzten Lauf hinzugekommen
+
+    @property
+    def aktive(self) -> list[Student]:
+        return [s for s in self.students if not s.abgelegt]
+
+    @property
+    def abgelegte(self) -> list[Student]:
+        return [s for s in self.students if s.abgelegt]
 
     @property
     def offen(self):
@@ -110,7 +119,7 @@ def _files(folder: Path) -> list[Path]:
     if not folder.exists():
         return []
     return sorted(p for p in folder.iterdir()
-                  if p.is_file() and p.suffix.lower() in SUPPORTED | {".xls"}
+                  if p.is_file() and p.suffix.lower() in SUPPORTED
                   and not p.name.startswith(("~$", ".")))
 
 
@@ -119,7 +128,10 @@ def load_tables(kurs_dir: Path, erg: Ergebnis) -> list[Table]:
     for base, prefix in ((kurs_dir, ""), (C.semester_of(kurs_dir), "../")):
         for f in _files(base):
             try:
-                tables += read_tables(f, prefix + f.name)
+                neu = read_tables(f, prefix + f.name)
+                for t in neu:
+                    t.mtime = f.stat().st_mtime
+                tables += neu
             except TableError as e:
                 erg.warnungen.append(str(e))
     return tables
@@ -128,12 +140,18 @@ def load_tables(kurs_dir: Path, erg: Ergebnis) -> list[Table]:
 # --------------------------------------------------------------------------- Studenten
 
 def load_students(tabs: list[Table], erg: Ergebnis) -> list[Student]:
+    """Liest alle Fassungen der offiziellen Liste. Die neueste Datei ist maßgeblich; wer nur in einer
+    älteren Fassung steht, bleibt erhalten und wird als „nicht mehr auf der aktuellen Liste“ markiert."""
     dec, out, seen = erg.dec, [], {}
+    tabs = sorted(tabs, key=lambda t: (-t.mtime, t.source))
+    fertig = 0
     for t in tabs:
         f = resolve_fields(t, "studenten", dec)
         if not f:
             continue
+        fertig += 1
         platz_werte = {r.get(f["platz"]) for r in t.rows} if "platz" in f else set()
+        in_tabelle = {}
         for row, n in zip(t.rows, t.row_numbers):
             raw = row.get(f.get("matrikel"))
             key = norm_matrikel(raw)
@@ -147,21 +165,37 @@ def load_students(tabs: list[Table], erg: Ergebnis) -> list[Student]:
                             [("ja", "ja, einbeziehen"), ("nein", "nein, nicht einbeziehen")])
                 if a != "ja":
                     continue
-            if key in seen:
-                if seen[key] != (row.get(f.get("nachname")), row.get(f.get("vorname"))):
+            name = (row.get(f.get("nachname")), row.get(f.get("vorname")))
+            if key in in_tabelle:
+                if in_tabelle[key] != name:
                     erg.warnungen.append(f"Matrikelnummer {raw} mehrfach mit unterschiedlichen Namen ({t.label}).")
                 continue
-            seen[key] = (row.get(f.get("nachname")), row.get(f.get("vorname")))
-            s = Student(key=key, matrikel=str(raw).strip(), nachname=row.get(f.get("nachname")) or "",
-                        vorname=row.get(f.get("vorname")) or "", email=row.get(f.get("email")),
-                        felder={k: row.get(v) for k, v in f.items()})
+            in_tabelle[key] = name
+            if key in seen:
+                continue                      # neuere Fassung hat Vorrang
+            seen[key] = name
+            s = Student(key=key, matrikel=str(raw).strip(), nachname=name[0] or "", vorname=name[1] or "",
+                        email=row.get(f.get("email")), felder={k: row.get(v) for k, v in f.items()})
             if isinstance(raw, (int, float)) and len(str(int(raw))) == 7:
                 s.matrikel = "0" + str(int(raw))
+            s.nicht_aktuell = fertig > 1
+            if s.nicht_aktuell:
+                erg.protokoll.append(("Studentenliste", s.anzeige, f"nur noch in älterer Fassung {t.label}"))
             if not s.email:
                 erg.warnungen.append(f"{s.anzeige}: keine E-Mail-Adresse in der offiziellen Liste.")
             out.append(s)
+    if len(tabs) > 1:
+        erg.protokoll.append(("Studentenliste", tabs[0].label, f"neueste von {len(tabs)} Fassungen; maßgeblich"))
     if not tabs:
         erg.warnungen.append("Keine offizielle Studentenliste gefunden.")
+    for s in out:
+        if s.nicht_aktuell:
+            dec.ask(qid("abgang", s.key), LISTE,
+                    f"{s.anzeige} steht nicht mehr auf der aktuellen Teilnehmerliste. Was soll geschehen?",
+                    [("ablage", "in die Ablage verschieben (alle Daten bleiben dokumentiert)"),
+                     ("behalten", "weiter in der Lehrveranstaltung mitführen")])
+        ab = dec.get(qid("ablage", s.key))
+        s.abgelegt = ab == "ja" or (ab != "nein" and s.nicht_aktuell and dec.get(qid("abgang", s.key)) == "ablage")
     return sorted(out, key=lambda s: (norm_text(s.nachname), norm_text(s.vorname)))
 
 
@@ -277,6 +311,7 @@ def load_logbook(tabs, cfg, dec, idx: StudentIndex, termine: list[Termin], erg: 
                             email=row.get(f.get("email")) if "email" in f else None,
                             nachname=row.get(f.get("nachname")) if "nachname" in f else None,
                             vorname=row.get(f.get("vorname")) if "vorname" in f else None)
+            dec.stumm = bool(s and s.abgelegt)
             if not s:
                 continue
             # stabile Kennung des Eintrags: bleibt gleich, wenn das Logbuch neu exportiert oder umbenannt wird
@@ -350,14 +385,18 @@ def load_logbook(tabs, cfg, dec, idx: StudentIndex, termine: list[Termin], erg: 
                 if a == "sonder":
                     sonder = True
             roh.setdefault((s.key, d), []).append(Eintrag(anw, mia, sonder, quelle))
+    dec.stumm = False
     _combine(roh, erg, dec)
+    dec.stumm = False
 
 
 def _combine(roh, erg: Ergebnis, dec: Decisions):
     prof = erg.profil
     maxpt = prof.get("mitarbeit", {}).get("max_pro_termin")
+    nach_key = {s.key: s for s in erg.students}
     for (key, d), eintraege in roh.items():
-        s_lbl = next((s.anzeige for s in erg.students if s.key == key), key)
+        s_lbl = nach_key[key].anzeige if key in nach_key else key
+        dec.stumm = bool(key in nach_key and nach_key[key].abgelegt)
         gleich = len({(e.anw, e.mia, e.sonder) for e in eintraege}) == 1
         if gleich and len(eintraege) > 1 and eintraege[0].mia > 0:
             gleich = False
@@ -502,6 +541,7 @@ def load_points(tabs, erg: Ergebnis, idx: StudentIndex) -> PunkteDaten:
                             email=ident.get("email"), nachname=ident.get("nachname"),
                             vorname=ident.get("vorname"),
                             codenummer=ident.get("codenummer") if not (set(f) - {"codenummer"}) else None)
+            dec.stumm = bool(s and s.abgelegt)
             if not s:
                 continue
             if ident.get("codenummer") and set(f) - {"codenummer"}:
@@ -523,6 +563,7 @@ def load_points(tabs, erg: Ergebnis, idx: StudentIndex) -> PunkteDaten:
                 if row.get(h):
                     pd.texte.setdefault((s.key, name), []).append(str(row.get(h)))
             del relevant
+    dec.stumm = False
     return pd
 
 
@@ -552,13 +593,15 @@ def score(erg: Ergebnis, pd: PunkteDaten):
     anteil = prof.get("positiv_anteil_standard", 0.5)
     ausstehend = bool(erg.termine_spaeter)
     for s in erg.students:
+        dec.stumm = s.abgelegt
         r = StudentErgebnis(s)
         pflicht, fehl = pflicht_status(erg, s)
         r.pflicht, r.abwesend = pflicht, fehl
         r.anwesend = len(erg.termine) - fehl
         r.mitarbeit = sum(erg.mia.get(s.key, {}).values())
         mia_pkt = r.mitarbeit * mit.get("punkte_pro_eintrag", 1) * mit.get("multiplikator", 1)
-        hat_daten = s.key in erg.anw or s.key in erg.mia or s.key in pd.gefunden
+        hat_daten = (s.key in erg.anw or s.key in erg.mia or s.key in pd.gefunden
+                     or any(dec.get(qid("manuell", s.key, tl["id"])) not in (None, "") for tl in prof["teilleistungen"]))
         override = dec.get(qid("status", s.key))
         if override is None and not hat_daten:
             override = dec.ask(qid("status", s.key), PERSON,
@@ -584,6 +627,8 @@ def score(erg: Ergebnis, pd: PunkteDaten):
                                 f"({'; '.join(f'{fmt(v)} in {q}' for v, q in vals)}). Welcher gilt?",
                                 [(str(v), fmt(v)) for v in distinct])
                     te.wert, te.status = (float(a), "ok") if a is not None else (None, "offen")
+                if te.wert is not None and tl.get("faktor") not in (None, 1):
+                    te.wert = te.wert * float(tl["faktor"])       # Gewichtung der Rohpunkte
                 if te.wert is not None and not te.zusatz and (te.wert < 0 or (te.max is not None and te.wert > te.max)):
                     a = dec.ask(qid("bereich", s.key, tl["id"], te.wert), PERSON,
                                 f"{s.anzeige}, {te.name}: {fmt(te.wert)} liegt außerhalb von 0 bis {fmt(te.max)}.",
@@ -592,6 +637,13 @@ def score(erg: Ergebnis, pd: PunkteDaten):
                         te.wert, te.status = None, "fehlt"
                     elif a is None:
                         te.status = "offen"
+            elif typ == "manuell":
+                a = dec.get(qid("manuell", s.key, tl["id"]))
+                num = parse_number(a) if a not in (None, "") else None
+                if num is None:
+                    te.status = "ok" if te.zusatz else "fehlt"
+                else:
+                    te.wert, te.quelle = num, "Eingabe in der App"
             else:
                 if typ == "anwesenheit":
                     wert = {"erfüllt": tl["max"], "nicht erfüllt": 0}.get(pflicht)
@@ -628,6 +680,7 @@ def score(erg: Ergebnis, pd: PunkteDaten):
             r.teile[tl["id"]] = te
         _gesamt(erg, r, override, pd)
         erg.ergebnisse[s.key] = r
+    dec.stumm = False
 
 
 def _gesamt(erg: Ergebnis, r: StudentErgebnis, override, pd: PunkteDaten):
@@ -725,4 +778,20 @@ def run(kurs_dir: Path, dec: Decisions | None = None, stichtag: date | None = No
     idx.fremd.clear()
     pd = load_points(rollen["punkte"], erg, idx)
     score(erg, pd)
+    _zugaenge(erg)
     return erg
+
+
+def _zugaenge(erg: Ergebnis):
+    """Merkt sich die bekannten Studenten und meldet, wer seit dem letzten Lauf neu auf der Liste steht."""
+    import json
+    p = erg.kurs_dir / C.APPDIR / "bekannte_studenten.json"
+    alt = set(json.loads(p.read_text(encoding="utf-8"))) if p.exists() else None
+    jetzt = {s.key for s in erg.students}
+    if alt is not None:
+        erg.neu_studenten = [s.anzeige for s in erg.students if s.key not in alt]
+        for n in erg.neu_studenten:
+            erg.protokoll.append(("Studentenliste", n, "neu aufgenommen"))
+    if erg.students and jetzt != alt:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(sorted(jetzt | (alt or set()))), encoding="utf-8")

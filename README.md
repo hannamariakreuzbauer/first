@@ -24,16 +24,25 @@ Eingang\                         frei wählbar
 Dateinamen sind frei. Die App erkennt die Listen am Inhalt und fragt bei Unklarheit einmal nach.
 
 ## Ablauf je Semester
-1. „＋ Semester“ und „＋ Lehrveranstaltung“. Für eine bestehende LV „Kopie des Vorsemesters“ wählen: Bewertung, Vorlage und Listenzuordnungen werden übernommen, personenbezogene Entscheidungen nicht.
-2. Listen der Universität und Punktelisten unverändert in den LV-Ordner legen, das Logbuch in den Semesterordner. Die App verarbeitet neue Dateien automatisch.
-3. Reiter „Bewertung“: Teilleistungen, Höchstpunkte, Quelle (Spalte aus Ihren Listen zur Auswahl), Positivitätsregel, Anwesenheits- und Mitarbeitsregeln, Notenschlüssel. „Als neues Profil speichern“ erzeugt eine eigene Fassung für diese LV.
-4. Reiter „Klärungen“: unklare Fälle per Klick entscheiden. Jede Antwort wird gespeichert und lässt sich unter „Protokoll“ zurücknehmen.
-5. Reiter „Ergebnisse“: Punkte, Note, Status; Status je Student festlegbar (ausgestiegen, unbeurteilt, Nachfrist …). Die Masterliste liegt als Excel-Datei vor.
-6. Reiter „E-Mail-Entwürfe“: Vorschau je Student, dann „Entwürfe in Outlook anlegen“ (klassisches Outlook) oder als .eml-Dateien und Serienbrief-Datei speichern. Es wird nichts versendet.
+1. „＋ Semester“ und „＋ Lehrveranstaltung“. Für eine bestehende LV „Kopie des Vorsemesters“ wählen: Bewertung (als eigene Fassung), Vorlage und Listenzuordnungen werden übernommen, personenbezogene Entscheidungen nicht.
+2. Dateien hinzufügen (Reiter „Übersicht“) oder direkt in die Ordner legen: Listen der Universität und Punktelisten zur LV, das Logbuch zum Semester. Ein Logbuch gilt für alle LV des Semesters. Listen werden nie abgetippt.
+3. Reiter „Bewertung“: Teilleistungen, Höchstpunkte, Quelle (Spalte aus Ihren Listen zur Auswahl), Gewichtung, Positivitätsregel, Anwesenheits- und Mitarbeitsregeln, Notenschlüssel.
+4. Reiter „Klärungen“: unklare Fälle per Klick entscheiden, in der Reihenfolge Zuordnungen, Termine/Teilnehmerliste, Einzelfälle. Jede Antwort wird gespeichert und lässt sich unter „Protokoll“ zurücknehmen.
+5. Reiter „Ergebnisse“: Punkte, Note, Status; Status je Student festlegbar. Einzelne Werte ohne Liste (z. B. Bonus/Malus) lassen sich hier eintragen, wenn die Teilleistung als „Eingabe in der App“ angelegt ist.
+6. Reiter „E-Mail-Entwürfe“: Vorschau je Student, Text einzelner Entwürfe bearbeiten, dann „Entwürfe in Outlook anlegen“ (klassisches Outlook) oder als .eml-Dateien und Serienbrief-Datei speichern. Es wird nichts versendet.
+7. Am Ende „abschließen“ neben dem Semesternamen: Ergebnisse als ZIP sichern, behalten oder löschen. Originaldateien werden nie gelöscht.
 
-## Ergebnisse (im LV-Ordner unter `_lvtool\ausgabe`)
-- `masterliste.xlsx` mit den Blättern Master, Anwesenheit, Mitarbeit, Klärungen, Rechenkontrolle, Warnungen, Protokoll und Entscheidungen.
-- `entwuerfe\*.eml`, `serienbrief.xlsx` und `serienbrief.csv`.
+## Zugänge, Abgänge und Ablage
+- Neue Studenten: die neue Teilnehmerliste der Universität zusätzlich hinzufügen. Die neueste Datei ist maßgeblich; neue Studenten werden aufgenommen, ihre früheren Logbuch-Einträge automatisch zugeordnet.
+- Wer nicht mehr auf der aktuellen Liste steht, wird einmal vorgelegt: „in die Ablage“ oder „weiter mitführen“.
+- Jeder Student lässt sich im Reiter „Ergebnisse“ in die Ablage verschieben. Die Ablage behält alle Daten (auch im Blatt „Ablage“ der Masterliste), nimmt den Studenten aber aus Ergebnissen und E-Mails und stellt keine Rückfragen mehr zu ihm. „Zurückholen“ macht das rückgängig.
+
+## Überwachung
+Solange die App läuft, verarbeitet sie neue oder geänderte Dateien aller Lehrveranstaltungen offener Semester automatisch; die Zahl offener Klärungen steht neben jeder LV. Unter „App-Einstellungen“ lässt sich einstellen, dass die App mit Windows startet und ohne Fenster im Hintergrund überwacht.
+
+## Ergebnisse (im LV-Ordner unter `_lvtool\\ausgabe`)
+- `masterliste.xlsx` mit den Blättern Master, Anwesenheit, Mitarbeit, Ablage, Klärungen, Rechenkontrolle, Warnungen, Protokoll und Entscheidungen.
+- `entwuerfe\\*.eml`, `serienbrief.xlsx` und `serienbrief.csv`.
 
 ## Regeln
 - Die offizielle Studentenliste ist die Referenz für die Identität, die Terminliste für die Termine.

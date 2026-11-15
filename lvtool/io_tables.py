@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-SUPPORTED = {".csv", ".txt", ".tsv", ".xlsx", ".xlsm", ".xml"}
+SUPPORTED = {".csv", ".txt", ".tsv", ".xlsx", ".xlsm", ".xls", ".xml"}
 
 
 @dataclass
@@ -18,6 +18,7 @@ class Table:
     headers: list[str]
     rows: list[dict] = field(default_factory=list)
     row_numbers: list[int] = field(default_factory=list)
+    mtime: float = 0.0     # Änderungszeit der Datei (neuere Fassung einer Liste gewinnt)
 
     @property
     def label(self) -> str:
@@ -99,6 +100,37 @@ def _read_xlsx(path: Path, source: str) -> list[Table]:
                 tables.append(t)
     finally:
         wb.close()
+    return tables
+
+
+def _read_xls(path: Path, source: str) -> list[Table]:
+    try:
+        import xlrd
+        wb = xlrd.open_workbook(str(path))
+    except Exception as e:  # noqa: BLE001
+        raise TableError(f"{source}: Excel-Datei (.xls) nicht lesbar ({e})") from e
+    tables = []
+    for sh in wb.sheets():
+        matrix = []
+        for r in range(sh.nrows):
+            zeile = []
+            for c in range(sh.ncols):
+                cell = sh.cell(r, c)
+                v = cell.value
+                if cell.ctype == xlrd.XL_CELL_DATE:
+                    try:
+                        v = xlrd.xldate_as_datetime(v, wb.datemode)
+                    except Exception:  # noqa: BLE001
+                        pass
+                elif cell.ctype == xlrd.XL_CELL_NUMBER and float(v).is_integer():
+                    v = int(v)
+                elif cell.ctype in (xlrd.XL_CELL_EMPTY, xlrd.XL_CELL_BLANK):
+                    v = None
+                zeile.append(v)
+            matrix.append(zeile)
+        t = _rows_to_table(source, sh.name, matrix)
+        if t and t.rows:
+            tables.append(t)
     return tables
 
 
@@ -210,7 +242,7 @@ def read_tables(path: Path, source: str | None = None) -> list[Table]:
     if ext == ".xml":
         return _read_xml(path, source)
     if ext == ".xls":
-        raise TableError(f"{source}: altes .xls-Format wird nicht unterstützt; bitte in Excel als .xlsx speichern.")
+        return _read_xls(path, source)
     raise TableError(f"{source}: Dateiformat {ext} wird nicht unterstützt.")
 
 

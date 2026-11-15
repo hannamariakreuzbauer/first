@@ -177,14 +177,15 @@ def assign_roles(tables: list[Table], profil: dict, dec: Decisions, protokoll: l
             v = vorschlag[id(t)]
             eindeutig = v in ("termine", "punkte") or (v in ("studenten", "logbuch") and counts.get(v) == 1)
             if v == "studenten" and not eindeutig:
+                # eigenständige Dateien sind Fassungen der offiziellen Liste (z. B. neuer Export mit Zugängen);
+                # Blätter innerhalb einer Arbeitsmappe sind Kopien und werden dann nicht verwendet
                 einzeln = [x for x in tables if vorschlag[id(x)] == "studenten" and _einzeldatei(x, tables)]
-                if len(einzeln) == 1:
-                    if einzeln[0] is t:
+                if einzeln:
+                    if any(x is t for x in einzeln):
                         eindeutig = True
-                        protokoll.append(("Rolle", t.label, "als offizielle Studentenliste bevorzugt (eigenständige Datei)"))
                     else:
                         rolle = "ignorieren"
-                        protokoll.append(("Rolle", t.label, f"nicht verwendet: {einzeln[0].label} ist die offizielle Studentenliste"))
+                        protokoll.append(("Rolle", t.label, "nicht verwendet: Kopie der offiziellen Studentenliste"))
                         out.setdefault(rolle, []).append(t)
                         continue
             if v and eindeutig:

@@ -15,7 +15,8 @@ from pathlib import Path
 STRUKTUR = "struktur"
 PERSON = "person"
 TERMIN = "termin"      # Entscheidungen zu Terminen: vor den Einzelfällen zu klären
-STUFEN = {STRUKTUR: 0, TERMIN: 1, PERSON: 2}
+LISTE = "liste"        # Zu- und Abgänge auf der Teilnehmerliste
+STUFEN = {STRUKTUR: 0, TERMIN: 1, LISTE: 1, PERSON: 2}
 
 
 def qid(*parts) -> str:
@@ -40,6 +41,7 @@ class Decisions:
         self.open: dict[str, Question] = {}
         self.fallback: dict[str, object] = {}     # semesterweite Antworten aus Nachbar-LV
         self.semesterweit: set[str] = set()
+        self.stumm = False     # True: keine neuen Fragen stellen (Studenten in der Ablage)
         if self.path and self.path.exists():
             self.answers = json.loads(self.path.read_text(encoding="utf-8"))
 
@@ -55,6 +57,8 @@ class Decisions:
             self.semesterweit.add(id_)
             if id_ in self.fallback:
                 return self.fallback[id_]
+        if self.stumm:
+            return None
         self.open[id_] = Question(id_, kategorie, frage, list(optionen), kontext or {}, freitext)
         return None
 

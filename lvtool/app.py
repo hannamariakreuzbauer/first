@@ -64,17 +64,22 @@ def _im_eingang(p: Path) -> Path:
 
 def zustand() -> dict:
     w = wurzel()
+    st = settings()
     out = {"version": __version__, "wurzel": str(w) if w else "", "semester": [], "profile": [], "vorlagen": [],
-           "status_werte": STATUS_WERTE}
+           "status_werte": STATUS_WERTE, "ueberwachen": st.get("ueberwachen", True), "autostart": bool(st.get("autostart")),
+           "autostart_moeglich": sys.platform == "win32" and bool(getattr(sys, "frozen", False))}
     if not w or not w.exists():
         return out
     for sem in sorted((p for p in w.iterdir() if p.is_dir() and not p.name.startswith(("_", "."))), reverse=True):
         kurse = []
         for k in sorted(p for p in sem.iterdir() if p.is_dir() and not p.name.startswith(("_", "."))):
             cfg = C.load_course(k) if C.is_course_dir(k) else None
+            erg = CACHE.get(str(k))
             kurse.append({"name": k.name, "pfad": str(k), "eingerichtet": bool(cfg),
-                          "titel": (cfg or {}).get("lv_titel") or "", "profil": (cfg or {}).get("profil") or ""})
-        out["semester"].append({"name": sem.name, "pfad": str(sem), "kurse": kurse})
+                          "titel": (cfg or {}).get("lv_titel") or "", "profil": (cfg or {}).get("profil") or "",
+                          "offen": len(erg.offen) if erg else None})
+        out["semester"].append({"name": sem.name, "pfad": str(sem), "kurse": kurse,
+                                "abgeschlossen": abgeschlossen(sem)})
     for pid in C.list_profiles(w):
         try:
             prof = C.load_profile(w, pid)
@@ -87,8 +92,16 @@ def zustand() -> dict:
     return out
 
 
+MARKE = "_abgeschlossen.json"
+
+
+def abgeschlossen(sem: Path) -> bool:
+    return (sem / MARKE).exists()
+
+
 def ergebnis_json(erg: Ergebnis) -> dict:
-    teile = [{"id": t["id"], "name": t.get("name", t["id"]), "max": t.get("max"), "zusatz": bool(t.get("zusatz"))}
+    teile = [{"id": t["id"], "name": t.get("name", t["id"]), "max": t.get("max"), "zusatz": bool(t.get("zusatz")),
+              "typ": t["typ"]}
              for t in erg.profil["teilleistungen"]]
     rows = []
     for s in erg.students:
@@ -100,11 +113,12 @@ def ergebnis_json(erg: Ergebnis) -> dict:
             "summe": fmt(r.summe), "note": r.note, "status": r.status, "pflicht": r.pflicht,
             "anwesend": r.anwesend, "abwesend": r.abwesend, "mitarbeit": r.mitarbeit,
             "hinweise": r.hinweise, "status_override": erg.dec.get(qid("status", s.key)) or "",
+            "abgelegt": s.abgelegt, "nicht_aktuell": s.nicht_aktuell,
         })
     return {
         "kurs": str(erg.kurs_dir), "profil": erg.profil.get("id"), "profil_bezeichnung": erg.profil.get("bezeichnung", ""),
         "zu_bestaetigen": erg.profil.get("zu_bestaetigen", []),
-        "teile": teile, "studenten": rows, "offen": erg.offen,
+        "teile": teile, "studenten": rows, "offen": erg.offen, "neu_studenten": erg.neu_studenten,
         "termine": [t.label for t in erg.termine], "termine_spaeter": [t.label for t in erg.termine_spaeter],
         "warnungen": erg.warnungen, "kontrolle": [list(k) for k in erg.kontrolle],
         "protokoll": [list(p) for p in erg.protokoll[:3000]], "protokoll_gesamt": len(erg.protokoll),
@@ -115,6 +129,8 @@ def ergebnis_json(erg: Ergebnis) -> dict:
 def verarbeiten(pfad: str, stichtag: str | None = None) -> dict:
     from .export_excel import write_master
     k = _im_eingang(Path(pfad))
+    if abgeschlossen(k.parent):
+        raise ValueError(f"Das Semester {k.parent.name} ist abgeschlossen. Zum Weiterarbeiten das Semester wieder öffnen.")
     with LOCK:
         dec = C.decisions_for(k)
         erg = run(k, dec, date.fromisoformat(stichtag) if stichtag else None)
@@ -286,6 +302,119 @@ def aktion(name: str, d: dict):
             out.append({"tabelle": t.label, "blatt": t.sheet or "",
                         "spalten": [(f"{t.sheet}:{h}" if t.sheet else h) for h in t.headers]})
         return out
+    if name == "ablage":
+        k = _im_eingang(Path(d["pfad"]))
+        with LOCK:
+            dec = C.decisions_for(k)
+            dec.answer(qid("ablage", d["key"]), "ja" if d.get("ablegen", True) else "nein",
+                       frage=f"Ablage für Matrikelnummer {d['key']}", kategorie=PERSON)
+            dec.save()
+        return verarbeiten(str(k))
+    if name == "manuell":
+        k = _im_eingang(Path(d["pfad"]))
+        with LOCK:
+            dec = C.decisions_for(k)
+            wert = str(d.get("wert", "")).strip().replace(",", ".")
+            if wert == "":
+                dec.answers.pop(qid("manuell", d["key"], d["tid"]), None)
+            else:
+                float(wert)
+                dec.answer(qid("manuell", d["key"], d["tid"]), wert, frage=f"Punkte {d['tid']} für {d['key']} (Eingabe in der App)",
+                           kategorie=PERSON)
+            dec.save()
+        return verarbeiten(str(k))
+    if name == "entwurf":
+        from . import report as R
+        erg = _erg(d["pfad"])
+        m = next(x for x in R.entwuerfe(erg, pruefen=False) if x["student"].key == d["key"])
+        return {"html": m["html"], "bearbeitet": m["bearbeitet"], "veraltet": m["veraltet"]}
+    if name == "entwurf_status":
+        from . import report as R
+        erg = _erg(d["pfad"])
+        try:
+            ms = R.entwuerfe(erg, pruefen=False)
+        except Exception:  # noqa: BLE001
+            return {"bearbeitet": [], "veraltet": []}
+        return {"bearbeitet": [m["student"].key for m in ms if m["bearbeitet"]],
+                "veraltet": [m["student"].key for m in ms if m["veraltet"]]}
+    if name == "entwurf_speichern":
+        from . import report as R
+        erg = _erg(d["pfad"])
+        if d.get("html") is None:
+            R.speichere_bearbeitung(erg.kurs_dir, d["key"], None, None)
+        else:
+            r = erg.ergebnisse[d["key"]]
+            basis, _ = R.render(R.vorlage_pfad(erg), R.werte(erg, r))
+            R.speichere_bearbeitung(erg.kurs_dir, d["key"], basis, d["html"])
+        return {"ok": True}
+    if name == "semester_uebersicht":
+        sem = _im_eingang(Path(d["pfad"]))
+        kurse = []
+        for k in sorted(p for p in sem.iterdir() if p.is_dir() and C.is_course_dir(p)):
+            aus = k / C.APPDIR / "ausgabe"
+            dateien = [p for p in aus.rglob("*") if p.is_file()] if aus.exists() else []
+            dec = C.decisions_for(k)
+            kurse.append({"name": k.name, "ergebnisdateien": len(dateien),
+                          "entscheidungen_person": sum(1 for v in dec.answers.values() if v.get("kategorie") != "struktur"),
+                          "originale": len([p for p in k.iterdir() if p.is_file()])})
+        return {"semester": sem.name, "abgeschlossen": abgeschlossen(sem), "kurse": kurse,
+                "semesterdateien": len([p for p in sem.iterdir() if p.is_file() and p.name != MARKE])}
+    if name == "semester_archivieren":
+        import zipfile
+        from datetime import datetime
+        sem = _im_eingang(Path(d["pfad"]))
+        ziel_ordner = Path(d["ziel"]).expanduser() if d.get("ziel") else sem
+        if not ziel_ordner.is_dir():
+            raise FileNotFoundError(f"Zielordner {ziel_ordner} existiert nicht.")
+        ziel = ziel_ordner / f"Archiv_{sem.name}_{datetime.now():%Y-%m-%d_%H%M}.zip"
+        n = 0
+        with LOCK, zipfile.ZipFile(ziel, "w", zipfile.ZIP_DEFLATED) as z:
+            for p in sorted(sem.rglob("*")):
+                if not p.is_file() or p == ziel or p.suffix.lower() == ".zip":
+                    continue
+                rel = p.relative_to(sem)
+                in_app = C.APPDIR in rel.parts
+                if in_app or d.get("originale"):
+                    z.write(p, str(Path(sem.name) / rel))
+                    n += 1
+        return {"datei": str(ziel), "anzahl": n}
+    if name == "semester_abschliessen":
+        import shutil
+        from datetime import datetime
+        sem = _im_eingang(Path(d["pfad"]))
+        with LOCK:
+            if d.get("loeschen"):
+                for k in (p for p in sem.iterdir() if p.is_dir() and C.is_course_dir(p)):
+                    aus = k / C.APPDIR / "ausgabe"
+                    if aus.exists():
+                        shutil.rmtree(aus)
+                    b = k / C.APPDIR / "entwurf_bearbeitet.json"
+                    if b.exists():
+                        b.unlink()
+                    dec = C.decisions_for(k)
+                    dec.answers = dec.structural_only()      # Zuordnungen bleiben für die Kopie ins nächste Semester
+                    dec.save()
+                    CACHE.pop(str(k), None)
+            (sem / MARKE).write_text(json.dumps({"zeit": datetime.now().astimezone().isoformat(timespec="seconds"),
+                                                 "ergebnisse_geloescht": bool(d.get("loeschen"))}), encoding="utf-8")
+            for k in list(CACHE):
+                if Path(k).parent == sem:
+                    CACHE.pop(k, None)
+        return zustand()
+    if name == "semester_oeffnen":
+        sem = _im_eingang(Path(d["pfad"]))
+        if (sem / MARKE).exists():
+            (sem / MARKE).unlink()
+        return zustand()
+    if name == "app_einstellungen":
+        st = settings()
+        if "ueberwachen" in d:
+            st["ueberwachen"] = bool(d["ueberwachen"])
+        if "autostart" in d:
+            setze_autostart(bool(d["autostart"]))
+            st["autostart"] = bool(d["autostart"])
+        save_settings(st)
+        return zustand()
     if name == "profil_kopieren":
         return {"pfad": str(C.copy_profile(wurzel(), d["alt"], d["neu"]))}
     if name == "ordner_waehlen":
@@ -296,9 +425,7 @@ def aktion(name: str, d: dict):
         return {"ok": True}
     if name == "aenderung":
         k = _im_eingang(Path(d["pfad"]))
-        files = [p for base in (k, k.parent) for p in base.iterdir() if p.is_file() and not p.name.startswith("~$")]
-        mt = max([p.stat().st_mtime for p in files] + [0])
-        return {"stand": mt}
+        return {"stand": _stand(k)}
     raise ValueError(f"Unbekannte Aktion {name}")
 
 
@@ -350,6 +477,7 @@ class Handler(BaseHTTPRequestHandler):
         return secrets.compare_digest(tok, TOKEN)
 
     def do_GET(self):  # noqa: N802
+        SEITENABRUFE["n"] += 1
         u = urlparse(self.path)
         qs = parse_qs(u.query)
         if u.path == "/":
@@ -399,6 +527,61 @@ def start_server(port=0) -> tuple[ThreadingHTTPServer, str]:
     return srv, f"http://127.0.0.1:{srv.server_address[1]}/?t={TOKEN}"
 
 
+def setze_autostart(an: bool):
+    """Trägt die App für den Windows-Start ein (im Hintergrund, ohne Fenster) oder entfernt den Eintrag."""
+    if sys.platform != "win32" or not getattr(sys, "frozen", False):
+        raise RuntimeError("Der Start mit Windows lässt sich nur in der Windows-App (LV-Tool.exe) einstellen.")
+    import winreg
+    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0,
+                        winreg.KEY_SET_VALUE) as k:
+        if an:
+            winreg.SetValueEx(k, "LV-Tool", 0, winreg.REG_SZ, f'"{sys.executable}" --hintergrund')
+        else:
+            try:
+                winreg.DeleteValue(k, "LV-Tool")
+            except FileNotFoundError:
+                pass
+
+
+STAENDE: dict[str, float] = {}
+
+
+def _stand(k: Path) -> float:
+    dateien = [p for base in (k, k.parent) for p in base.iterdir() if p.is_file() and not p.name.startswith("~$")]
+    return max([p.stat().st_mtime for p in dateien] + [(k / C.APPDIR / "kurs.json").stat().st_mtime])
+
+
+def ueberwache_einmal() -> list[str]:
+    """Verarbeitet alle Lehrveranstaltungen offener Semester, deren Dateien sich geändert haben."""
+    w = wurzel()
+    neu = []
+    if not w or not w.exists() or not settings().get("ueberwachen", True):
+        return neu
+    for sem in (p for p in w.iterdir() if p.is_dir() and not p.name.startswith(("_", "."))):
+        if abgeschlossen(sem):
+            continue
+        for k in (p for p in sem.iterdir() if p.is_dir() and C.is_course_dir(p)):
+            try:
+                st = _stand(k)
+                if STAENDE.get(str(k)) != st:
+                    STAENDE[str(k)] = st
+                    verarbeiten(str(k))
+                    neu.append(str(k))
+            except Exception:  # noqa: BLE001
+                traceback.print_exc()
+    return neu
+
+
+def _ueberwacher(intervall=30):
+    import time
+    while True:
+        try:
+            ueberwache_einmal()
+        except Exception:  # noqa: BLE001
+            traceback.print_exc()
+        time.sleep(intervall)
+
+
 def chrome_pfad() -> str | None:
     """Sucht Google Chrome (kein Edge)."""
     kandidaten = []
@@ -446,7 +629,7 @@ def _waechter(minuten=3):
     while True:
         time.sleep(15)
         t = LETZTER_PULS["t"]
-        if t and time.time() - t > minuten * 60:
+        if t and time.time() - t > minuten * 60 and not settings().get("autostart"):
             os._exit(0)
 
 
@@ -474,11 +657,82 @@ def _chrome_fenster(chrome: str, url: str):
                              "--no-default-browser-check", "--window-size=1360,880"])
 
 
+def selbsttest(ziel: str) -> int:
+    """Prüft die gebaute App auf dem Zielsystem (wird beim Bauen der .exe ausgeführt)."""
+    import tempfile
+    import time
+    import urllib.request
+    erg: dict = {"plattform": sys.platform, "eingefroren": bool(getattr(sys, "frozen", False))}
+    try:
+        tmp = Path(tempfile.mkdtemp(prefix="lvtool_test_"))
+        os.environ["APPDATA"] = str(tmp / "_appdata")
+        from .beispiel import erzeuge
+        k = erzeuge(tmp / "eingang")
+        aktion("wurzel", {"pfad": str(tmp / "eingang")})
+        e = aktion("verarbeiten", {"pfad": str(k)})
+        for _ in range(10):
+            if not e["offen"]:
+                break
+            for q in e["offen"]:
+                wert = "nein" if q["frage"].startswith("Termin 2025-09-30") else q["optionen"][0][0]
+                aktion("antwort", {"pfad": str(k), "id": q["id"], "wert": wert})
+            e = aktion("verarbeiten", {"pfad": str(k)})
+        erg["studenten"], erg["offen"] = len(e["studenten"]), len(e["offen"])
+        erg["entwuerfe"] = aktion("entwuerfe", {"pfad": str(k), "art": "datei"})["eml"]
+        erg["masterliste"] = Path(e["master"]).exists()
+        erg["oberflaeche"] = UI.exists()
+        try:
+            import tkinter  # noqa: F401
+            erg["ordnerdialog_modul"] = True
+        except Exception as ex:  # noqa: BLE001
+            erg["ordnerdialog_modul"] = str(ex)
+        if sys.platform == "win32":
+            try:
+                import pythoncom  # noqa: F401
+                import win32com.client  # noqa: F401
+                erg["outlook_modul"] = True
+            except Exception as ex:  # noqa: BLE001
+                erg["outlook_modul"] = str(ex)
+        srv, url = start_server()
+        with urllib.request.urlopen(url, timeout=5) as r:
+            erg["server"] = r.status
+        chrome = chrome_pfad()
+        erg["chrome"] = chrome or ""
+        if chrome:
+            SEITENABRUFE["n"] = 0
+            proc = _chrome_fenster(chrome, url)
+            for _ in range(40):
+                time.sleep(0.5)
+                if SEITENABRUFE["n"] >= 2:      # Seite und erster Datenabruf aus dem Chrome-Fenster
+                    break
+            erg["chrome_fenster_laedt_app"] = SEITENABRUFE["n"] >= 2
+            erg["chrome_prozess_laeuft"] = proc.poll() is None
+            proc.terminate()
+        erg["ok"] = bool(erg["studenten"] == 8 and erg["offen"] == 0 and erg["entwuerfe"] == 8 and erg["server"] == 200
+                         and erg["oberflaeche"] and erg["masterliste"])
+        if sys.platform == "win32":
+            erg["ok"] = bool(erg["ok"] and erg["ordnerdialog_modul"] is True and erg["outlook_modul"] is True
+                             and (not chrome or erg["chrome_fenster_laedt_app"]))
+    except Exception:  # noqa: BLE001
+        erg["ok"] = False
+        erg["fehler"] = traceback.format_exc()
+    Path(ziel).write_text(json.dumps(erg, ensure_ascii=False, indent=2), encoding="utf-8")
+    return 0 if erg["ok"] else 1
+
+
+SEITENABRUFE = {"n": 0}
+
+
 def main():
     import time
+    if "--selbsttest" in sys.argv:
+        sys.exit(selbsttest(sys.argv[sys.argv.index("--selbsttest") + 1]))
+    hintergrund = "--hintergrund" in sys.argv
     chrome = None if "--browser" in sys.argv else chrome_pfad()
     vorhanden = _laufende_instanz()
     if vorhanden:
+        if hintergrund:
+            return
         if chrome:
             _chrome_fenster(chrome, vorhanden)
         else:
@@ -491,10 +745,15 @@ def main():
         _instanz_datei().write_text(json.dumps({"url": url}), encoding="utf-8")
     except OSError:
         pass
+    threading.Thread(target=_ueberwacher, daemon=True).start()
+    if hintergrund:
+        threading.Event().wait()      # ohne Fenster: nur überwachen, bis die App beendet wird
     start = time.time()
     if chrome:
         proc = _chrome_fenster(chrome, url)
         proc.wait()
+        if settings().get("autostart"):
+            threading.Event().wait()  # läuft im Hintergrund weiter; Ende über „App beenden“
         if time.time() - start > 15:
             return      # eigenes Chrome-Fenster wurde geschlossen -> App beenden
         # Chrome hat den Start an einen anderen Prozess abgegeben: über Lebenszeichen des Fensters beenden

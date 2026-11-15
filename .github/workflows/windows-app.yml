@@ -25,8 +25,15 @@ jobs:
           pyinstaller --noconfirm --onefile --windowed --name LV-Tool --paths .
           --add-data "lvtool/ui.html;lvtool"
           --add-data "lvtool/profil_vorlagen;lvtool/profil_vorlagen"
-          --hidden-import win32com.client --hidden-import pythoncom
+          --hidden-import win32com.client --hidden-import pythoncom --hidden-import xlrd --hidden-import tkinter --hidden-import tkinter.filedialog
           packaging/start.py
+      - name: Selbsttest der fertigen LV-Tool.exe
+        shell: pwsh
+        run: |
+          $ziel = Join-Path $env:RUNNER_TEMP "selbsttest.json"
+          $p = Start-Process -FilePath "dist\LV-Tool.exe" -ArgumentList "--selbsttest", $ziel -Wait -PassThru
+          if (Test-Path $ziel) { Get-Content $ziel } else { Write-Host "kein Ergebnis geschrieben" }
+          if ($p.ExitCode -ne 0) { exit 1 }
       - uses: actions/upload-artifact@v4
         with:
           name: LV-Tool-Windows

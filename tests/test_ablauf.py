@@ -283,3 +283,156 @@ def test_hochladen(kurs, tmp_path, monkeypatch):
     assert app.hochladen(str(kurs), "semester", "neu.csv", b"anders", True)["status"] == "gespeichert"
     with pytest.raises(ValueError):
         app.hochladen(str(kurs), "kurs", "../../boese.exe", b"x", False)
+
+
+def _tn_datei(pfad, studenten_):
+    from lvtool.beispiel import TN_KOPF, _spreadsheetml
+    rows = [TN_KOPF] + [["Standardgruppe", i + 1, "fix", s["nachname"], s["vorname"], "N", s["matrikel"], "UA", f"S{i}",
+                         "Studium", 3, "2025-09-01", "", s["email"], ""] for i, s in enumerate(studenten_)]
+    pfad.write_text(_spreadsheetml(rows), encoding="utf-8")
+
+
+def test_zugaenge_abgaenge_und_ablage(kurs, tmp_path):
+    """Neue Teilnehmerliste dazulegen: Neue kommen herein, Abgänger wandern auf Wunsch in die Ablage."""
+    import os
+    import time
+
+    from lvtool.export_excel import write_master
+    erg = lauf_bis_fertig(kurs)
+    assert len(erg.aktive) == 8
+    alle = studenten()
+    geht = alle[5]
+    neu = {"nachname": "Nachzügler", "vorname": "Nora", "matrikel": "12777001", "email": "nora@x.at", "code": 9}
+    datei = kurs / "TN_LV999999_neu.xml"
+    _tn_datei(datei, [s for s in alle if s is not geht] + [neu])
+    jetzt = time.time() + 5
+    os.utime(datei, (jetzt, jetzt))                       # neuere Fassung
+    dec = C.decisions_for(kurs)
+    erg = run(kurs, dec, STICHTAG)
+    fragen = [q for q in erg.offen if "nicht mehr auf der aktuellen Teilnehmerliste" in q["frage"]]
+    assert len(fragen) == 1 and geht["nachname"] in fragen[0]["frage"]
+    assert any("Nachzügler" in n for n in erg.neu_studenten)
+    assert not [q for q in erg.offen if "Wofür ist die Tabelle" in q["frage"]], "zweite Liste darf keine Rollenfrage auslösen"
+    dec.answer(fragen[0]["id"], "ablage")
+    for _ in range(5):
+        erg = run(kurs, dec, STICHTAG)
+        if not erg.offen:
+            break
+        beantworte(dec, erg, standard)
+    assert len(erg.aktive) == 8 and [s.nachname for s in erg.abgelegte] == [geht["nachname"]]
+    # Daten des Abgängers bleiben dokumentiert
+    r = erg.ergebnisse[erg.abgelegte[0].key]
+    assert r.anwesend > 0 and r.teile["HUE_50"].wert is not None
+    ziel = write_master(erg, tmp_path / "m.xlsx")
+    tabs = {t.sheet: t for t in read_tables(ziel)}
+    assert len(tabs["Ablage"].rows) == 1 and len(tabs["Master"].rows) == 8
+    assert geht["nachname"] not in [m["student"].nachname for m in R.entwuerfe(erg)]
+    # zurückholen
+    dec.answer(qid("ablage", erg.abgelegte[0].key), "nein")
+    assert len(run(kurs, dec, STICHTAG).aktive) == 9
+
+
+def test_ablage_stellt_keine_fragen(kurs):
+    erg = lauf_bis_fertig(kurs)
+    dec = C.decisions_for(kurs)
+    s1 = next(s for s in erg.students if s.nachname == "Beispiel")   # hat die „teilweise“-Meldung
+    for k in [k for k, v in dec.answers.items() if "Beispiel" in v.get("frage", "")]:
+        dec.answers.pop(k)
+    assert run(kurs, dec, STICHTAG).offen
+    dec.answer(qid("ablage", s1.key), "ja")
+    assert not run(kurs, dec, STICHTAG).offen
+
+
+def test_manuelle_punkte_und_faktor(kurs, tmp_path):
+    root = tmp_path
+    p = C.load_profile(root, "BEISPIEL")
+    p["id"] = "MAN"
+    for t in p["teilleistungen"]:
+        if t["id"] == "TEST_30":
+            t["faktor"] = 0.5
+            t["max"] = 15
+    p["teilleistungen"].append({"id": "BONUS", "name": "Bonus/Malus", "typ": "manuell", "max": None, "zusatz": True})
+    import json
+    (root / "_profile" / "MAN.json").write_text(json.dumps(p), encoding="utf-8")
+    cfg = C.load_course(kurs)
+    cfg["profil"] = "MAN"
+    C.save_course(kurs, cfg)
+    erg = lauf_bis_fertig(kurs)
+    s = erg.students[0]
+    r = erg.ergebnisse[s.key]
+    roh = {x["matrikel"]: i for i, x in enumerate(studenten())}
+    assert r.teile["TEST_30"].wert == (10 + 2 * roh[s.matrikel]) * 0.5
+    assert r.teile["BONUS"].wert is None and r.teile["BONUS"].status == "ok"
+    dec = C.decisions_for(kurs)
+    dec.answer(qid("manuell", s.key, "BONUS"), "-2.5")
+    r2 = run(kurs, dec, STICHTAG).ergebnisse[s.key]
+    assert r2.teile["BONUS"].wert == -2.5 and r2.summe == r.summe - 2.5
+
+
+def test_altes_xls_format(tmp_path):
+    xlwt = pytest.importorskip("xlwt")
+    wb = xlwt.Workbook()
+    ws = wb.add_sheet("Liste")
+    for c, h in enumerate(["Familienname", "Vorname", "Matrikelnummer", "E-Mail"]):
+        ws.write(0, c, h)
+    for c, v in enumerate(["Alt", "Anton", 12345678, "a@x.at"]):
+        ws.write(1, c, v)
+    wb.save(str(tmp_path / "alt.xls"))
+    t = read_tables(tmp_path / "alt.xls")[0]
+    assert t.headers[:3] == ["Familienname", "Vorname", "Matrikelnummer"] and t.rows[0]["Matrikelnummer"] == 12345678
+
+
+def test_entwurf_bearbeiten_und_semester_abschliessen(kurs, tmp_path, monkeypatch):
+    from lvtool import app
+    monkeypatch.setenv("APPDATA", str(tmp_path / "_appdata"))
+    app.CACHE.clear()
+    app.aktion("wurzel", {"pfad": str(tmp_path)})
+    lauf_bis_fertig(kurs)
+    e = app.aktion("verarbeiten", {"pfad": str(kurs)})
+    key = e["studenten"][0]["key"]
+    orig = app.aktion("entwurf", {"pfad": str(kurs), "key": key})["html"]
+    app.aktion("entwurf_speichern", {"pfad": str(kurs), "key": key, "html": orig.replace("Hallo,", "Liebe Anna,")})
+    r = app.aktion("entwurf", {"pfad": str(kurs), "key": key})
+    assert r["bearbeitet"] and "Liebe Anna," in r["html"]
+    app.aktion("entwuerfe", {"pfad": str(kurs), "art": "datei"})
+    emls = list((kurs / "_lvtool" / "ausgabe" / "entwuerfe").glob("*.eml"))
+    assert len(emls) == 8 and sum(b"Liebe Anna," in p.read_bytes() for p in emls) == 1
+    # Daten ändern sich -> Bearbeitung gilt als veraltet und wird nicht stillschweigend verwendet
+    app.aktion("status", {"pfad": str(kurs), "key": key, "wert": "nachfrist"})
+    r = app.aktion("entwurf", {"pfad": str(kurs), "key": key})
+    assert r["veraltet"] and not r["bearbeitet"] and "Liebe Anna," not in r["html"]
+
+    sem = kurs.parent
+    originale = {p: p.read_bytes() for p in sem.rglob("*") if p.is_file() and "_lvtool" not in p.parts}
+    a = app.aktion("semester_archivieren", {"pfad": str(sem), "ziel": "", "originale": False})
+    import zipfile
+    namen = zipfile.ZipFile(a["datei"]).namelist()
+    assert any(n.endswith("masterliste.xlsx") for n in namen) and not any(n.endswith("punkte.xlsx") for n in namen)
+    app.aktion("semester_abschliessen", {"pfad": str(sem), "loeschen": True})
+    assert not (kurs / "_lvtool" / "ausgabe").exists()
+    assert all(v["kategorie"] == "struktur" for v in C.decisions_for(kurs).answers.values())
+    assert all(p.read_bytes() == b for p, b in originale.items()), "Originaldateien müssen unverändert bleiben"
+    with pytest.raises(ValueError):
+        app.aktion("verarbeiten", {"pfad": str(kurs)})
+    assert app.ueberwache_einmal() == []            # abgeschlossene Semester werden nicht mehr verarbeitet
+    app.aktion("semester_oeffnen", {"pfad": str(sem)})
+    assert app.aktion("verarbeiten", {"pfad": str(kurs)})["studenten"]
+
+
+def test_ueberwachung_aller_lv(tmp_path, monkeypatch):
+    from lvtool import app
+    monkeypatch.setenv("APPDATA", str(tmp_path / "_appdata"))
+    app.CACHE.clear()
+    app.STAENDE.clear()
+    a = erzeuge(tmp_path, kurs="LV_A")
+    b = erzeuge(tmp_path, kurs="LV_B")
+    app.aktion("wurzel", {"pfad": str(tmp_path)})
+    assert sorted(app.ueberwache_einmal()) == sorted([str(a), str(b)])
+    assert app.ueberwache_einmal() == []
+    z = app.zustand()
+    assert all(k["offen"] for k in z["semester"][0]["kurse"])     # Zähler offener Fragen je LV
+    import os
+    import time
+    t = time.time() + 5
+    os.utime(b / "punkte.xlsx", (t, t))
+    assert app.ueberwache_einmal() == [str(b)]

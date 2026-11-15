@@ -200,8 +200,8 @@ def vorlage_pfad(erg: Ergebnis) -> Path:
     raise FileNotFoundError(f"Report-Vorlage {name} nicht gefunden.")
 
 
-def entwuerfe(erg: Ergebnis) -> list[dict]:
-    if not erg.students:
+def entwuerfe(erg: Ergebnis, pruefen: bool = True) -> list[dict]:
+    if not erg.aktive:
         raise ValueError("Es gibt noch keine Studenten; bitte zuerst die offizielle Studentenliste in den Ordner legen.")
     vorlage = vorlage_pfad(erg)
     bekannte = set(werte(erg, next(iter(erg.ergebnisse.values()))).keys()) if erg.ergebnisse else set()
@@ -215,16 +215,62 @@ def entwuerfe(erg: Ergebnis) -> list[dict]:
     if erg.ergebnisse:
         probe = werte(erg, next(iter(erg.ergebnisse.values())))
         fehlt = [lbl for k, lbl in pflicht.items() if k in verwendet and not probe.get(k)]
-        if fehlt:
+        if fehlt and pruefen:
             raise ValueError("Bitte zuerst in den Einstellungen ausfüllen: " + ", ".join(fehlt) + ".")
     out = []
-    for s in erg.students:
+    bearbeitet = lade_bearbeitungen(erg.kurs_dir)
+    for s in erg.aktive:
         r = erg.ergebnisse[s.key]
         v = werte(erg, r)
         h, t = render(vorlage, v)
         betreff = re.sub(r"\{\{?\s*([A-Za-z0-9_]+)\s*\}\}?", lambda m: v.get(m.group(1), m.group(0)), erg.cfg.get("betreff", ""))
-        out.append({"student": s, "ergebnis": r, "an": s.email, "betreff": betreff, "html": h, "text": t, "werte": v})
+        m = {"student": s, "ergebnis": r, "an": s.email, "betreff": betreff, "html": h, "text": t, "werte": v,
+             "bearbeitet": False, "veraltet": False}
+        b = bearbeitet.get(s.key)
+        if b:
+            if b.get("basis") == basis_hash(h):
+                m["html"], m["text"], m["bearbeitet"] = b["html"], html_zu_text(b["html"]), True
+            else:
+                m["veraltet"] = True      # Daten haben sich seit der Bearbeitung geändert
+        out.append(m)
     return out
+
+
+def basis_hash(h: str) -> str:
+    import hashlib
+    return hashlib.sha1(h.encode("utf-8")).hexdigest()
+
+
+def _bearb_pfad(kurs_dir: Path) -> Path:
+    return kurs_dir / "_lvtool" / "entwurf_bearbeitet.json"
+
+
+def lade_bearbeitungen(kurs_dir: Path) -> dict:
+    import json
+    p = _bearb_pfad(kurs_dir)
+    return json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+
+
+def speichere_bearbeitung(kurs_dir: Path, key: str, basis_html: str | None, neu_html: str | None):
+    """Speichert den von Hand bearbeiteten Entwurf eines Studenten (None = verwerfen)."""
+    import json
+    d = lade_bearbeitungen(kurs_dir)
+    if neu_html is None:
+        d.pop(key, None)
+    else:
+        neu_html = re.sub(r"<script\b.*?</script>", "", neu_html, flags=re.S | re.I)
+        d[key] = {"basis": basis_hash(basis_html), "html": neu_html}
+    p = _bearb_pfad(kurs_dir)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
+
+
+def html_zu_text(h: str) -> str:
+    h = re.sub(r"<head\b.*?</head>", "", h, flags=re.S | re.I)
+    h = re.sub(r"</td>\s*<td[^>]*>", "\t", h, flags=re.I)
+    h = re.sub(r"<br\s*/?>|</p>|</tr>|</li>|</h[1-6]>|</div>", "\n", h, flags=re.I)
+    h = re.sub(r"<li[^>]*>", "• ", h, flags=re.I)
+    return re.sub(r"\n{3,}", "\n\n", html.unescape(re.sub(r"<[^>]+>", "", h))).strip()
 
 
 def _dateiname(s) -> str:

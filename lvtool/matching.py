@@ -50,6 +50,8 @@ class Student:
     email: str | None
     felder: dict = field(default_factory=dict)   # alle übrigen Felder der offiziellen Liste
     codenummer: set = field(default_factory=set)
+    abgelegt: bool = False        # in der Ablage: dokumentiert, aber nicht mehr in Ergebnissen und E-Mails
+    nicht_aktuell: bool = False   # steht nicht mehr auf der neuesten Teilnehmerliste
 
     @property
     def anzeige(self) -> str:

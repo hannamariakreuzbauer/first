@@ -37,15 +37,18 @@ def write_master(erg: Ergebnis, ziel: Path) -> Path:
     header = (["Matrikelnummer", "Familienname", "Vorname", "E-Mail"]
               + [f"{t['id']}" for t in teile] + ["Summe", "Note", "Status", "Anwesenheitspflicht",
                                                   "Fehltermine", "Mitarbeit (Einträge)"] + textf + ["Hinweise"])
-    rows = []
-    for s in erg.students:
-        r = erg.ergebnisse[s.key]
-        rows.append([s.matrikel, s.nachname, s.vorname, s.email]
-                    + [r.teile[t["id"]].wert for t in teile]
-                    + [r.summe, r.note, r.status, r.pflicht, r.abwesend, r.mitarbeit]
-                    + [r.texte.get(k, "") for k in textf] + [" ".join(r.hinweise)])
-    ws = _sheet(wb, "Master", header, rows, {"Hinweise": 60})
-    for i, s in enumerate(erg.students, start=2):
+    def zeilen(studenten):
+        rows = []
+        for s in studenten:
+            r = erg.ergebnisse[s.key]
+            rows.append([s.matrikel, s.nachname, s.vorname, s.email]
+                        + [r.teile[t["id"]].wert for t in teile]
+                        + [r.summe, r.note, r.status, r.pflicht, r.abwesend, r.mitarbeit]
+                        + [r.texte.get(k, "") for k in textf] + [" ".join(r.hinweise)])
+        return rows
+    aktive = erg.aktive
+    ws = _sheet(wb, "Master", header, zeilen(aktive), {"Hinweise": 60})
+    for i, s in enumerate(aktive, start=2):
         r = erg.ergebnisse[s.key]
         for j, t in enumerate(teile, start=5):
             te = r.teile[t["id"]]
@@ -57,7 +60,7 @@ def write_master(erg: Ergebnis, ziel: Path) -> Path:
     termine = erg.termine + erg.termine_spaeter
     th = [t.datum.isoformat() for t in termine]
     awl, mia = [], []
-    for s in erg.students:
+    for s in aktive:
         a = erg.anw.get(s.key, {})
         m = erg.mia.get(s.key, {})
         awl.append([s.matrikel, s.nachname, s.vorname]
@@ -68,6 +71,8 @@ def write_master(erg: Ergebnis, ziel: Path) -> Path:
     _sheet(wb, "Anwesenheit", ["Matrikelnummer", "Familienname", "Vorname"] + th + ["anwesend", "Fehltermine"], awl)
     _sheet(wb, "Mitarbeit", ["Matrikelnummer", "Familienname", "Vorname"] + th + ["Summe"], mia)
 
+    if erg.abgelegte:
+        _sheet(wb, "Ablage", header, zeilen(erg.abgelegte), {"Hinweise": 60})
     offen = [(q["frage"], " | ".join(lbl for _, lbl in q["optionen"]), q["id"]) for q in erg.offen]
     ws = _sheet(wb, "Klärungen", ["Offene Frage", "Antwortmöglichkeiten", "ID"], offen, {"Offene Frage": 100, "Antwortmöglichkeiten": 50})
     for row in ws.iter_rows(min_row=2):
