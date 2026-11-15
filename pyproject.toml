@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lvtool"
-version = "0.1.0"
+version = "0.2.0"
 description = "Studenten-, Anwesenheits-, Mitarbeits- und Leistungsdaten lokal zusammenführen und Reports als E-Mail-Entwürfe erstellen"
 requires-python = ">=3.10"
 dependencies = ["openpyxl>=3.1", "python-docx>=1.1", "lxml>=5", "xlrd>=2.0"]
