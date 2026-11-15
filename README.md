@@ -2,7 +2,7 @@
 Eigenständige lokale App nach dem Pflichtenheft „Studenten- und Leistungsdaten“ (Arbeitsfassung 1.1, Variante 1: ohne Cloud-KI) für beliebige Lehrveranstaltungen und Semester. Sie liest die Listen der Universität, das Logbuch und Ihre Punktelisten ein, gleicht alles mit der offiziellen Studentenliste ab, erstellt die Masterliste und bereitet für jeden Studenten einen E-Mail-Entwurf mit dem individuellen Report vor. Es wird nichts versendet und nichts an Dritte übermittelt. Die Originaldateien bleiben unverändert.
 
 ## Die App (Windows-PC)
-`LV-Tool.exe` ist eine einzelne Programmdatei. Ein Doppelklick öffnet ein eigenes Fenster (Google Chrome im App-Modus, ohne Adressleiste). Eine Installation von Python ist nicht nötig. Die Datei wird bei jeder Änderung automatisch auf GitHub gebaut: Repository → „Actions“ → neuester Lauf „Windows-App“ → Artefakt „LV-Tool-Windows“ herunterladen und entpacken.
+`LV-Tool.exe` ist eine einzelne Programmdatei. Ein Doppelklick öffnet ein eigenes Fenster (Google Chrome im App-Modus, ohne Adressleiste). Eine Installation von Python ist nicht nötig. Die Datei wird bei jeder Änderung automatisch auf GitHub gebaut und als Release veröffentlicht: Repository → „Releases“ → neueste Fassung → `LV-Tool.exe` herunterladen.
 
 Beim ersten Start meldet Windows SmartScreen eine unbekannte App, weil die Datei nicht signiert ist: „Weitere Informationen“ → „Trotzdem ausführen“.
 
@@ -40,9 +40,9 @@ Dateinamen sind frei. Die App erkennt die Listen am Inhalt und fragt bei Unklarh
 ## Überwachung
 Solange die App läuft, verarbeitet sie neue oder geänderte Dateien aller Lehrveranstaltungen offener Semester automatisch; die Zahl offener Klärungen steht neben jeder LV. Unter „App-Einstellungen“ lässt sich einstellen, dass die App mit Windows startet und ohne Fenster im Hintergrund überwacht.
 
-## Ergebnisse (im LV-Ordner unter `_lvtool\\ausgabe`)
+## Ergebnisse (im LV-Ordner unter `_lvtool\ausgabe`)
 - `masterliste.xlsx` mit den Blättern Master, Anwesenheit, Mitarbeit, Ablage, Klärungen, Rechenkontrolle, Warnungen, Protokoll und Entscheidungen.
-- `entwuerfe\\*.eml`, `serienbrief.xlsx` und `serienbrief.csv`.
+- `entwuerfe\*.eml`, `serienbrief.xlsx` und `serienbrief.csv`.
 
 ## Regeln
 - Die offizielle Studentenliste ist die Referenz für die Identität, die Terminliste für die Termine.
