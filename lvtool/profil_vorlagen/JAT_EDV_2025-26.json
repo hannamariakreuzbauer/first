@@ -1,0 +1,113 @@
+{
+  "id": "JAT_EDV_2025-26",
+  "bezeichnung": "JAT/EDV – Arbeitsmappe 2025/26",
+  "grundlage": "01_jat_edv_wise_2025-2026.xlsx (Blätter MAIN, TEST, HUE_1), SCORE_ALL-Formel, Report 02_report_jat_abrechnung.docx",
+  "zu_bestaetigen": [
+    "Positivitätsgrenze: 50 % je Punkteteilleistung angenommen; Mitarbeit ohne Mindestgrenze",
+    "AW-Punkte werden aus der Arbeitsmappe übernommen, weil sie dort unabhängig von der Zahl der Fehltermine vergeben sind; die Anwesenheit aus dem Logbuch dient als Übersicht",
+    "Mitarbeit wird aus dem Logbuch berechnet und wie in der Arbeitsmappe nicht bei 10 gekappt; Abweichungen zur Arbeitsmappe werden vorgelegt"
+  ],
+  "teilleistungen": [
+    {
+      "id": "TEST_30",
+      "name": "Test",
+      "typ": "liste",
+      "max": 30,
+      "spalten": [
+        "TEST:SCORE",
+        "MAIN:TEST_30"
+      ]
+    },
+    {
+      "id": "HUE_1_40",
+      "name": "HUE 1",
+      "typ": "liste",
+      "max": 40,
+      "spalten": [
+        "HUE_1:SCORE_40",
+        "MAIN:HUE_1_40"
+      ]
+    },
+    {
+      "id": "AW_SCORE_10",
+      "name": "AW-Punkte",
+      "typ": "liste",
+      "max": 10,
+      "spalten": [
+        "MAIN:AW_SCORE_10"
+      ]
+    },
+    {
+      "id": "MIA_ALL_10",
+      "name": "Mitarbeit",
+      "typ": "mitarbeit",
+      "max": 10,
+      "kappen": false,
+      "positiv": "keine",
+      "kontrolle": [
+        "MAIN:MIA_ALL_10"
+      ]
+    },
+    {
+      "id": "RECH_10",
+      "name": "Rechercheübung",
+      "typ": "liste",
+      "max": 10,
+      "spalten": [
+        "MAIN:RECH_10"
+      ]
+    },
+    {
+      "id": "EXTRA_SCORE",
+      "name": "Sonderpunkte",
+      "typ": "liste",
+      "max": null,
+      "zusatz": true,
+      "spalten": [
+        "MAIN:EXTRA_SCORE"
+      ]
+    }
+  ],
+  "anwesenheit": {
+    "frei_versaeumbar": 2,
+    "mit_kompensation": 1,
+    "sonderfall_wiederholt_ab": 2
+  },
+  "mitarbeit": {
+    "punkte_pro_eintrag": 1,
+    "multiplikator": 1,
+    "max_pro_termin": 2
+  },
+  "positiv_anteil_standard": 0.5,
+  "gesamt_max": 100,
+  "kontrollspalten_gesamt": [
+    "MAIN:SCORE",
+    "MAIN:SCORE_ALL"
+  ],
+  "kontrollspalten_note": [
+    "MAIN:GRADE"
+  ],
+  "notenschluessel": [
+    {
+      "unter": 50,
+      "note": "5 (NG)"
+    },
+    {
+      "unter": 62.5,
+      "note": "4 (GN)"
+    },
+    {
+      "unter": 75,
+      "note": "3 (BE)"
+    },
+    {
+      "unter": 87.5,
+      "note": "2 (GU)"
+    },
+    {
+      "unter": null,
+      "note": "1 (SG)"
+    }
+  ],
+  "negativ_note": "5 (NG)"
+}

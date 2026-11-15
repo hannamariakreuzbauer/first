@@ -1,0 +1,14 @@
+# Keine personenbezogenen Daten ins Repository
+*.xlsx
+*.xlsm
+*.xls
+*.csv
+*.xml
+*.docx
+*.eml
+_lvtool/
+eingang/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.venv/

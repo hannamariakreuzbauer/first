@@ -1,0 +1,46 @@
+{
+  "id": "VIAVO_v4.1",
+  "bezeichnung": "VIAVO (VO und UE verbunden) – nur Anwesenheit/Mitarbeit",
+  "grundlage": "WIA VO Booklet, Version 4.1; ausschließlich Regeln zu Anwesenheit und Mitarbeit",
+  "zu_bestaetigen": [
+    "Weitere Teilleistungen und Notenschlüssel fehlen noch; ohne Notenschlüssel wird keine Note berechnet",
+    "Positivitätsgrenze der Anwesenheits-/Mitarbeitskomponente"
+  ],
+  "teilleistungen": [
+    {
+      "id": "AW_MIA_10",
+      "name": "Anwesenheit und Mitarbeit",
+      "typ": "anwesenheit_mitarbeit",
+      "max": 10,
+      "anwesenheit_punkte": 5,
+      "positiv": "erfuellt"
+    },
+    {
+      "id": "BONUS_MALUS",
+      "name": "Bonus/Malus",
+      "typ": "liste",
+      "max": null,
+      "zusatz": true,
+      "spalten": [
+        "BONUS_MALUS",
+        "BONUS"
+      ]
+    }
+  ],
+  "anwesenheit": {
+    "frei_versaeumbar": 2,
+    "mit_kompensation": 1,
+    "sonderfall_wiederholt_ab": 2
+  },
+  "mitarbeit": {
+    "punkte_pro_eintrag": 1,
+    "multiplikator": 1,
+    "max_pro_termin": 1
+  },
+  "positiv_anteil_standard": 0.5,
+  "gesamt_max": 100,
+  "kontrollspalten_gesamt": [],
+  "kontrollspalten_note": [],
+  "notenschluessel": null,
+  "negativ_note": "5 (NG)"
+}

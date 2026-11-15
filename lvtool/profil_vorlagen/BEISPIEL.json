@@ -1,0 +1,81 @@
+{
+  "id": "BEISPIEL",
+  "bezeichnung": "Beispielprofil für die erfundenen Testdaten",
+  "grundlage": "frei erfunden, nur zur Vorführung",
+  "zu_bestaetigen": [],
+  "teilleistungen": [
+    {
+      "id": "AW_MIA_20",
+      "name": "Anwesenheit und Mitarbeit",
+      "typ": "anwesenheit_mitarbeit",
+      "max": 20,
+      "anwesenheit_punkte": 10,
+      "positiv": "erfuellt"
+    },
+    {
+      "id": "TEST_30",
+      "name": "Test",
+      "typ": "liste",
+      "max": 30,
+      "spalten": [
+        "MAIN:TEST_30"
+      ]
+    },
+    {
+      "id": "HUE_50",
+      "name": "Hausübung",
+      "typ": "liste",
+      "max": 50,
+      "spalten": [
+        "HUE:SCORE_50"
+      ]
+    },
+    {
+      "id": "EXTRA_SCORE",
+      "name": "Zusatzpunkte",
+      "typ": "liste",
+      "max": null,
+      "zusatz": true,
+      "spalten": [
+        "MAIN:EXTRA_SCORE"
+      ]
+    }
+  ],
+  "anwesenheit": {
+    "frei_versaeumbar": 2,
+    "mit_kompensation": 1,
+    "sonderfall_wiederholt_ab": 2
+  },
+  "mitarbeit": {
+    "punkte_pro_eintrag": 1,
+    "multiplikator": 2,
+    "max_pro_termin": 1
+  },
+  "positiv_anteil_standard": 0.5,
+  "gesamt_max": 100,
+  "kontrollspalten_gesamt": [],
+  "kontrollspalten_note": [],
+  "notenschluessel": [
+    {
+      "unter": 50,
+      "note": "5 (NG)"
+    },
+    {
+      "unter": 62.5,
+      "note": "4 (GN)"
+    },
+    {
+      "unter": 75,
+      "note": "3 (BE)"
+    },
+    {
+      "unter": 87.5,
+      "note": "2 (GU)"
+    },
+    {
+      "unter": null,
+      "note": "1 (SG)"
+    }
+  ],
+  "negativ_note": "5 (NG)"
+}

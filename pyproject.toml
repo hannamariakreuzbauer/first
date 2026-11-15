@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lvtool"
+version = "0.1.0"
+description = "Studenten-, Anwesenheits-, Mitarbeits- und Leistungsdaten lokal zusammenführen und Reports als E-Mail-Entwürfe erstellen"
+requires-python = ">=3.10"
+dependencies = ["openpyxl>=3.1", "python-docx>=1.1", "lxml>=5"]
+
+[project.optional-dependencies]
+outlook = ["pywin32>=306; sys_platform == 'win32'"]
+test = ["pytest>=8"]
+
+[project.scripts]
+lvtool = "lvtool.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["lvtool*"]
+
+[tool.setuptools.package-data]
+lvtool = ["profil_vorlagen/*.json"]
