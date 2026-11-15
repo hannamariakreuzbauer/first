@@ -37,6 +37,11 @@ Dateinamen sind frei. Die App erkennt die Listen am Inhalt und fragt bei Unklarh
 - Wer nicht mehr auf der aktuellen Liste steht, wird einmal vorgelegt: „in die Ablage“ oder „weiter mitführen“.
 - Jeder Student lässt sich im Reiter „Ergebnisse“ in die Ablage verschieben. Die Ablage behält alle Daten (auch im Blatt „Ablage“ der Masterliste), nimmt den Studenten aber aus Ergebnissen und E-Mails und stellt keine Rückfragen mehr zu ihm. „Zurückholen“ macht das rückgängig.
 
+## Bereinigung der Einträge
+Einträge aus Logbuch und Punktelisten werden gegen die offizielle Studentenliste bereinigt. Die App wertet Matrikelnummer, E-Mail-Adresse und Name gemeinsam und übernimmt die richtige Schreibweise aus der Liste. Automatisch erledigt werden unter anderem: Groß-/Kleinschreibung und Leerzeichen, vertauschte Vor- und Nachnamen, fehlende Zweitnamen und Initialen, Umlaut- und Akzentschreibweisen, Buchstaben- und Zifferndreher, Tippfehler in der wiederholten Matrikelnummer, private E-Mail-Adressen, verlorene führende Nullen, Ja/Nein statt 1/0 sowie Datumsangaben mit falschem Jahr, vertauschtem Tag und Monat oder knapp neben dem einzigen möglichen Termin. Jede Bereinigung steht im Protokoll; die Übersicht zeigt die Bilanz.
+
+Gefragt wird nur im echten Zweifel, etwa wenn die Angaben auf verschiedene Studenten zeigen, ein Name mehrfach vorkommt oder ein passender Name mit einer fremden Matrikelnummer auftritt. Solche Fälle erscheinen unter „Klärungen“ als Zeile: links der Eintrag, rechts eine Auswahlliste mit Vorschlägen und allen Studenten. Eine bestätigte Zuordnung merkt sich die App als Alias.
+
 ## Überwachung
 Solange die App läuft, verarbeitet sie neue oder geänderte Dateien aller Lehrveranstaltungen offener Semester automatisch; die Zahl offener Klärungen steht neben jeder LV. Unter „App-Einstellungen“ lässt sich einstellen, dass die App mit Windows startet und ohne Fenster im Hintergrund überwacht.
 

@@ -62,8 +62,9 @@ class Decisions:
         self.open[id_] = Question(id_, kategorie, frage, list(optionen), kontext or {}, freitext)
         return None
 
-    def answer(self, id_: str, value, frage: str | None = None, kategorie: str | None = None):
+    def answer(self, id_: str, value, frage: str | None = None, kategorie: str | None = None, kontext: dict | None = None):
         q = self.open.pop(id_, None)
+        kontext = kontext or (q.kontext if q else None)
         self.answers[id_] = {
             "antwort": value,
             "frage": frage or (q.frage if q else ""),
@@ -72,6 +73,9 @@ class Decisions:
         }
         if id_ in self.semesterweit:
             self.answers[id_]["semesterweit"] = True
+        if kontext and kontext.get("art") == "zuordnung":
+            # als lokaler Alias merken: dieselbe E-Mail bzw. Matrikel-Variante wird künftig erkannt
+            self.answers[id_]["kontext"] = {"art": "zuordnung", "eintrag": kontext.get("eintrag", {})}
 
     def save(self):
         if not self.path:

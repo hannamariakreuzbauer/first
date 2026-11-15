@@ -436,3 +436,112 @@ def test_ueberwachung_aller_lv(tmp_path, monkeypatch):
     t = time.time() + 5
     os.utime(b / "punkte.xlsx", (t, t))
     assert app.ueberwache_einmal() == [str(b)]
+
+
+# --------------------------------------------------------------------------- aggressive Bereinigung
+
+def _index():
+    from lvtool.matching import Student, StudentIndex
+    roh = [("12000001", "Muster", "Anna Maria", "anna.muster@stud.x.at"), ("12000008", "Müller-Lüdenscheidt", "Björn", "bjoern.m@stud.x.at"),
+           ("12000015", "Černý", "Annalena", "annalena.cerny@stud.x.at"), ("12000022", "Huber", "Felix", "felix.huber@stud.x.at"),
+           ("12000029", "Huber", "Franziska", "franziska.huber@stud.x.at"), ("01234567", "Schmidt", "Jo", "jo.schmidt@stud.x.at")]
+    from lvtool.matching import norm_matrikel
+    return StudentIndex([Student(norm_matrikel(m), m, n, v, e) for m, n, v, e in roh])
+
+
+@pytest.mark.parametrize("eingabe,erwartet", [
+    (dict(nachname="Muster", vorname="Anna Maria", matrikel=["12000001", "12000001"]), "12000001"),      # genau
+    (dict(nachname="Anna", vorname="Muster"), "12000001"),                                               # Felder vertauscht, Zweitname fehlt
+    (dict(nachname="MUSTER ", vorname=" anna"), "12000001"),                                             # Groß/Klein, Leerzeichen
+    (dict(nachname="Mustre", vorname="Anna"), "12000001"),                                               # Buchstabendreher
+    (dict(nachname="Mueller-Luedenscheidt", vorname="Bjoern"), "12000008"),                              # Umlaut umschrieben
+    (dict(nachname="Muller Ludenscheidt", vorname="Bjorn"), "12000008"),                                 # Umlaut weggelassen, Bindestrich
+    (dict(nachname="Cerny", vorname="Annalena"), "12000015"),                                            # Hatschek
+    (dict(nachname="Cerny", vorname="A."), "12000015"),                                                  # Initiale
+    (dict(nachname="Xy", vorname="Zz", matrikel=["12000001", "12000001"], email="anna.muster@stud.x.at"), "12000001"),  # zwei starke Merkmale
+    (dict(nachname="Muster", vorname="Anna", matrikel=["12000001", "12000010"]), "12000001"),            # Tippfehler in Wiederholung
+    (dict(nachname="Muster", vorname="Anna", matrikel=["12000010", "12000010"]), "12000001"),            # Zifferndreher in der Matrikelnummer, Name passt
+    (dict(nachname="Huber", vorname="Felix", email="felix.huber@gmail.com"), "12000022"),                # private E-Mail
+    (dict(nachname="", vorname="", email="felix.hubre@stud.x.at", matrikel=["12000022"]), "12000022"),   # E-Mail-Tippfehler
+    (dict(nachname="Schmidt", vorname="Jo", matrikel=[1234567, 1234567]), "01234567"),                   # führende Null verloren
+    (dict(nachname="Schmitt", vorname="Jo"), "01234567"),                                                # Schreibvariante
+])
+def test_bereinigung_automatisch(eingabe, erwartet):
+    from lvtool.decisions import Decisions
+    idx, dec, prot = _index(), Decisions(None), []
+    s = idx.resolve(dec, prot, "Test", **eingabe)
+    assert s is not None and s.matrikel == erwartet, (eingabe, prot, dec.open_list())
+    assert not dec.open
+
+
+@pytest.mark.parametrize("eingabe", [
+    dict(nachname="Huber", vorname=""),                                              # zwei Huber
+    dict(nachname="Huber", vorname="F."),                                            # Initiale passt auf beide
+    dict(nachname="Muster", vorname="Anna", matrikel=["12000022", "12000022"]),      # Name und Matrikel zeigen auf Verschiedene
+    dict(nachname="Xy", vorname="Zz", matrikel=["12000001", "12000001"]),            # nur Matrikel, Name völlig anders
+    dict(nachname="Muster", vorname="Anna Maria", matrikel=["11555555", "11555555"], email="am@gmail.com"),  # Namensgleiche mit fremder Matrikel
+    dict(nachname="Hubert", vorname="Felix", matrikel=["11555555", "11555555"]),      # ähnlicher Name, fremde Matrikel
+])
+def test_bereinigung_zweifel_wird_gefragt(eingabe):
+    from lvtool.decisions import Decisions
+    idx, dec = _index(), Decisions(None)
+    assert idx.resolve(dec, [], "Test", **eingabe) is None
+    q = dec.open_list()
+    assert len(q) == 1 and q[0]["kontext"]["art"] == "zuordnung" and q[0]["kontext"]["alle"]
+    assert q[0]["kontext"]["vorschlaege"], "Vorschläge für die Auswahlliste fehlen"
+
+
+def test_bereinigung_fremde_werden_nicht_gefragt():
+    from lvtool.decisions import Decisions
+    idx, dec, prot = _index(), Decisions(None), []
+    # andere Gruppe: Nachbar-Matrikelnummer, aber anderer Name
+    assert idx.resolve(dec, prot, "../log.xlsx [S] Zeile 5", nachname="Gruber", vorname="Tom", matrikel=["12000002"], email="t@x.at") is None
+    assert not dec.open and idx.fremd
+
+
+def test_bestaetigte_zuordnung_wird_alias(tmp_path):
+    from lvtool.decisions import Decisions
+    dec = Decisions(tmp_path / "e.json")
+    idx = _index()
+    assert idx.resolve(dec, [], "T", nachname="Xy", vorname="Zz", matrikel=["12000001"]) is None
+    q = dec.open_list()[0]
+    dec.answer(q["id"], "12000001")
+    dec.save()
+    dec2 = Decisions(tmp_path / "e.json")
+    idx2 = _index()
+    idx2.lerne(dec2)
+    assert idx2.resolve(dec2, [], "T", nachname="Xy", vorname="Zz", matrikel=["12000001"]).matrikel == "12000001"
+
+
+def test_datum_bereinigung(kurs):
+    import datetime as dt
+
+    import openpyxl
+    lauf_bis_fertig(kurs)
+    lb = kurs.parent / "lv_logbuch.xlsx"
+    wb = openpyxl.load_workbook(lb)
+    ws = wb["SOURCE"]
+    s = studenten()[6]
+    basis = [s["nachname"], s["vorname"], s["email"], int(s["matrikel"]), int(s["matrikel"]), "Beispiel-Lehrveranstaltung [BSP]",
+             "Anwesenheits- und Mitarbeits-Vermerk"]
+    # Student 6 fehlt an mehreren Terminen? Wir fügen Einträge mit verdorbenem Datum für bestehende Termine hinzu.
+    ws.append([dt.datetime(2025, 12, 1, 18)] + basis + [dt.datetime(2024, 12, 1), dt.datetime(2024, 12, 1), "ja", "nein"])        # falsches Jahr
+    ws.append([dt.datetime(2025, 12, 9, 18)] + basis + [dt.datetime(2025, 12, 9), dt.datetime(2025, 12, 9), 1, 0])                # einen Tag daneben
+    ws.append([dt.datetime(2025, 11, 10, 18)] + basis + [dt.datetime(2025, 10, 11), dt.datetime(2025, 10, 11), "x", 0])           # Tag/Monat vertauscht
+    ws.append([dt.datetime(2025, 6, 1, 18)] + basis + [dt.datetime(2025, 6, 1), dt.datetime(2025, 6, 1), 1, 1])                   # weit weg: kein Termin
+    wb.save(lb)
+    dec = C.decisions_for(kurs)
+    erg = run(kurs, dec, STICHTAG)
+    assert not [q for q in erg.offen if "Datumsangabe" in q["frage"]]
+    for _ in range(5):
+        if not erg.offen:
+            break
+        beantworte(dec, erg, standard)
+        erg = run(kurs, dec, STICHTAG)
+    daten = [p for p in erg.protokoll if p[0] == "Datum bereinigt"]
+    assert len(daten) == 3, daten
+    assert [p for p in erg.protokoll if p[0] == "Kein Termin"]
+    key = next(x.key for x in erg.students if x.matrikel == s["matrikel"])
+    for d in (dt.date(2025, 12, 1), dt.date(2025, 12, 8), dt.date(2025, 11, 10)):
+        assert d in erg.anw[key]
+    assert not [q for q in erg.offen if "Datumsangabe" in q["frage"]]

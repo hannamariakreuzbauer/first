@@ -89,6 +89,7 @@ class Ergebnis:
     kontrolle: list = field(default_factory=list)
     warnungen: list = field(default_factory=list)
     neu_studenten: list = field(default_factory=list)   # seit dem letzten Lauf hinzugekommen
+    bereinigung: dict = field(default_factory=dict)     # Zähler der automatischen Bereinigung
 
     @property
     def aktive(self) -> list[Student]:
@@ -274,7 +275,9 @@ def _art(wert, dec: Decisions) -> str | None:
                    semesterweit=True)
 
 
-def _datum(row, f, termine: set, dec, quelle, ident, eid=None) -> date | None:
+def _datum(row, f, termine: set, dec, quelle, ident, eid=None, erg=None, idx=None) -> date | None:
+    """Ermittelt den gemeinten Termin. Eindeutige Korrekturen (Wiederholungsfeld, Tag/Monat vertauscht,
+    falsches Jahr, knapp daneben bei nur einem möglichen Termin) erfolgen automatisch und werden protokolliert."""
     roh = [row.get(f[k]) for k in ("datum", "datum2") if k in f and row.get(f[k]) is not None]
     cands = []
     for r in roh:
@@ -282,16 +285,64 @@ def _datum(row, f, termine: set, dec, quelle, ident, eid=None) -> date | None:
             if c not in cands:
                 cands.append(c)
     treffer = [c for c in cands if c in termine]
+
+    def korrigiert(d, wie):
+        if erg is not None:
+            erg.protokoll.append(("Datum bereinigt", quelle, f"{ident}: {' / '.join(map(str, roh))} → {d.isoformat()} ({wie})"))
+        if idx is not None:
+            idx.statistik["datum"] += 1
+        return d
+
     if len(treffer) == 1:
+        if len({str(r) for r in roh}) > 1 or treffer[0] != cands[0]:
+            return korrigiert(treffer[0], "nur diese Angabe ist ein Termin")
         return treffer[0]
+    if not treffer and cands:
+        varianten = set()
+        for c in cands:
+            if c.day <= 12:                                   # Tag und Monat vertauscht
+                try:
+                    varianten.add(date(c.year, c.day, c.month))
+                except ValueError:
+                    pass
+            for t in termine:                                 # falsches Jahr
+                if (t.month, t.day) == (c.month, c.day):
+                    varianten.add(t)
+        v = sorted(x for x in varianten if x in termine)
+        if len(v) == 1:
+            return korrigiert(v[0], "Tag/Monat vertauscht oder falsches Jahr")
+        nahe = sorted({t for c in cands for t in termine if abs((t - c).days) <= 3})
+        if len(nahe) == 1 and not v:
+            return korrigiert(nahe[0], "einziger Termin in drei Tagen Abstand")
     nahe = sorted({t for c in cands for t in termine if abs((t - c).days) <= 3})
     opts = [(t.isoformat(), t.isoformat()) for t in (treffer or nahe)] + [("__ignorieren__", "Eintrag nicht werten")]
-    grund = "passt zu mehreren Terminen" if treffer else "passt zu keinem offiziellen Termin"
+    if not (treffer or nahe):
+        if erg is not None:   # weit von jedem Termin entfernt: kein Zweifelsfall, sondern kein Termin dieser LV
+            erg.protokoll.append(("Kein Termin", quelle, f"{ident}: {' / '.join(map(str, roh)) or '(leer)'} – nicht gewertet"))
+        return None
+    grund = "passt zu mehreren Terminen" if len(treffer or nahe) > 1 else "passt zu keinem offiziellen Termin"
     a = dec.ask(qid("datum", eid or quelle, *map(str, roh)), PERSON,
                 f"{quelle} ({ident}): Datumsangabe {' / '.join(map(str, roh)) or '(leer)'} {grund}. Welcher Termin ist gemeint?",
                 opts)
     if a and a != "__ignorieren__":
         return date.fromisoformat(a)
+    return None
+
+
+JA = {"ja", "j", "yes", "y", "x", "anwesend", "wahr", "true"}
+NEIN = {"nein", "n", "no", "nicht anwesend", "abwesend", "falsch", "false", "-"}
+
+
+def _zahl_oder_wort(v):
+    """Zahl aus Zahl, Zahl-als-Text oder Ja/Nein-Wort; None, wenn nicht eindeutig."""
+    num = parse_number(v)
+    if num is not None:
+        return num
+    w = norm_text(v)
+    if w in JA:
+        return 1.0
+    if w in NEIN:
+        return 0.0
     return None
 
 
@@ -322,7 +373,7 @@ def load_logbook(tabs, cfg, dec, idx: StudentIndex, termine: list[Termin], erg: 
                 continue
             text = row.get(f["text"]) if "text" in f else None
             upload = row.get(f["upload"]) if "upload" in f else None
-            d = _datum(row, f, tset, dec, quelle, s.anzeige, eid)
+            d = _datum(row, f, tset, dec, quelle, s.anzeige, eid, erg, idx)
             if art == "sonstiges":
                 a = dec.ask(qid("sonstiges", eid, s.key, text, upload), PERSON,
                             f"{quelle}: Sonstiger Eintrag von {s.anzeige}"
@@ -341,7 +392,7 @@ def load_logbook(tabs, cfg, dec, idx: StudentIndex, termine: list[Termin], erg: 
             # Anwesenheit
             av = row.get(f["anwesenheit"]) if "anwesenheit" in f else None
             sonder = False
-            num = parse_number(av)
+            num = _zahl_oder_wort(av)
             if av is None:
                 anw = None
             elif num is not None:
@@ -357,7 +408,7 @@ def load_logbook(tabs, cfg, dec, idx: StudentIndex, termine: list[Termin], erg: 
                 anw, sonder = a in ("anwesend", "sonder"), a == "sonder"
             # Mitarbeit
             mv = row.get(f["mitarbeit"]) if "mitarbeit" in f else None
-            mnum = parse_number(mv)
+            mnum = _zahl_oder_wort(mv)
             if mv is None:
                 mia = 0
             elif mnum is not None and mnum >= 0:
@@ -751,6 +802,8 @@ def run(kurs_dir: Path, dec: Decisions | None = None, stichtag: date | None = No
     te_tabs = [t for t in rollen["termine"] if not t.source.startswith("../")]
     erg.students = load_students(st_tabs, erg)
     idx = StudentIndex(erg.students)
+    idx.lerne(dec)
+    erg.bereinigung = idx.statistik
 
     alle = load_termine(te_tabs, cfg, dec, erg, kursname)
     log_cfg = dict(cfg)

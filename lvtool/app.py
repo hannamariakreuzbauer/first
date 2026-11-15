@@ -118,7 +118,7 @@ def ergebnis_json(erg: Ergebnis) -> dict:
     return {
         "kurs": str(erg.kurs_dir), "profil": erg.profil.get("id"), "profil_bezeichnung": erg.profil.get("bezeichnung", ""),
         "zu_bestaetigen": erg.profil.get("zu_bestaetigen", []),
-        "teile": teile, "studenten": rows, "offen": erg.offen, "neu_studenten": erg.neu_studenten,
+        "teile": teile, "studenten": rows, "offen": erg.offen, "neu_studenten": erg.neu_studenten, "bereinigung": erg.bereinigung,
         "termine": [t.label for t in erg.termine], "termine_spaeter": [t.label for t in erg.termine_spaeter],
         "warnungen": erg.warnungen, "kontrolle": [list(k) for k in erg.kontrolle],
         "protokoll": [list(p) for p in erg.protokoll[:3000]], "protokoll_gesamt": len(erg.protokoll),
@@ -211,7 +211,8 @@ def aktion(name: str, d: dict):
             q = erg.dec.open.get(d["id"])
             dec = C.decisions_for(k)
             dec.semesterweit = erg.dec.semesterweit
-            dec.answer(d["id"], d["wert"], frage=q.frage if q else "", kategorie=q.kategorie if q else PERSON)
+            dec.answer(d["id"], d["wert"], frage=q.frage if q else "", kategorie=q.kategorie if q else PERSON,
+                       kontext=q.kontext if q else None)
             dec.save()
             erg.dec.answers = dec.answers
             erg.dec.open.pop(d["id"], None)
